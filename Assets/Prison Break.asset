@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27141471782b0764ea97af9b1a93b392, type: 3}
+  m_Name: Prison Break
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeMusketeers.Theming.ThemeDefinition
+  themeId: default
+  displayName: Prison Break
+  offensePrefab: {fileID: 0}
+  defensePrefab: {fileID: 0}
+  tilePrefab: {fileID: 0}
+  lightTileMaterial: {fileID: 0}
+  darkTileMaterial: {fileID: 0}
+  environmentPrefab: {fileID: 0}
+  offenseFallbackColor: {r: 0.85, g: 0.75, b: 0.35, a: 1}
+  defenseFallbackColor: {r: 0.25, g: 0.3, b: 0.4, a: 1}
+  lightTileFallbackColor: {r: 0.78, g: 0.76, b: 0.7, a: 1}
+  darkTileFallbackColor: {r: 0.45, g: 0.43, b: 0.4, a: 1}
+  offenseLabel: Convicts
+  defenseLabel: Guards
+  offenseTurnText: Convicts' turn -- tap a convict, then a highlighted guard to slip past them.
+  defenseTurnText: Guards' turn -- tap a guard, then an empty cell to move them.
+  offenseWinText: The convicts made it out!
+  defenseWinText: Recaptured -- the guards win.
