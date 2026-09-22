@@ -1,4 +1,5 @@
 using ThreeMusketeers.Core;
+using ThreeMusketeers.Theming;
 using UnityEngine;
 
 namespace ThreeMusketeers.Gameplay
@@ -20,40 +21,38 @@ namespace ThreeMusketeers.Gameplay
         private static readonly Color OwnedGlowColor = new Color(0.55f, 0.85f, 1f, 0.7f);
         private const float OwnedGlowBlend = 0.45f; // 0 = no glow, 1 = solid OwnedGlowColor
 
-        public void Initialize(Coord coord, Renderer renderer)
-        {
-            Coord = coord;
-            _renderer = renderer;
-            if (_renderer != null) _baseColor = GetColor();
+      private ThemeDefinition _theme;
 
-            // Defensive: a theme's own tile prefab might forget a Collider.
-            // Tap-to-select relies on every tile having one, so add a simple
-            // box collider sized to the renderer bounds if nothing exists.
-            if (GetComponentInChildren<Collider>() == null && _renderer != null)
-            {
-                var box = gameObject.AddComponent<BoxCollider>();
-                var bounds = _renderer.bounds;
-                box.center = transform.InverseTransformPoint(bounds.center);
-                box.size = new Vector3(1f, 0.2f, 1f); // footprint only needs to be roughly right for tap accuracy
-            }
-        }
+public void Initialize(Coord coord, Renderer renderer, ThemeDefinition theme)
+{
+    Coord = coord;
+    _renderer = renderer;
+    _theme = theme;
+    if (_renderer != null) _baseColor = GetColor();
 
-        /// <summary>
-        /// selected: this tile is the currently-selected piece.
-        /// legalDestination: this tile is a legal destination for the current selection.
-        /// hasLegalMove: this tile holds a piece belonging to the current player that
-        /// currently has at least one legal move (the "hint" glow) -- GameManager only
-        /// passes true here once its configurable hint delay has elapsed.
-        /// </summary>
-        public void SetHighlight(bool selected, bool legalDestination, bool hasLegalMove)
-        {
-            if (_renderer == null) return;
+    if (GetComponentInChildren<Collider>() == null && _renderer != null)
+    {
+        var box = gameObject.AddComponent<BoxCollider>();
+        var bounds = _renderer.bounds;
+        box.center = transform.InverseTransformPoint(bounds.center);
+        box.size = new Vector3(1f, 0.2f, 1f);
+    }
+}
 
-            if (selected) SetColor(SelectedColor);
-            else if (legalDestination) SetColor(LegalDestinationColor);
-            else if (hasLegalMove) SetColor(Color.Lerp(_baseColor, OwnedGlowColor, OwnedGlowBlend));
-            else SetColor(_baseColor);
-        }
+public void SetHighlight(bool selected, bool legalDestination, bool hasLegalMove)
+{
+    if (_renderer == null) return;
+
+    if (selected) SetColor(_theme != null ? _theme.selectedHighlightColor : new Color(1f, 0.85f, 0.2f, 0.7f));
+    else if (legalDestination) SetColor(_theme != null ? _theme.legalDestinationHighlightColor : new Color(0.4f, 0.85f, 0.4f, 0.7f));
+    else if (hasLegalMove)
+    {
+        Color glow = _theme != null ? _theme.ownedGlowHighlightColor : new Color(0.55f, 0.85f, 1f, 0.7f);
+        float blend = _theme != null ? _theme.ownedGlowBlend : 0.45f;
+        SetColor(Color.Lerp(_baseColor, glow, blend));
+    }
+    else SetColor(_baseColor);
+}
 
         private void SetColor(Color color)
         {

@@ -31,7 +31,11 @@ namespace ThreeMusketeers.Gameplay
         /// (potentially mismatched) reference to a theme asset.
         /// </summary>
         public ThemeDefinition Theme => theme;
-
+        [Header("Default theme (used automatically whenever no theme has been selected)")]
+        [Tooltip("Drag your real 'Default' ThemeDefinition asset here. If left empty, falls back to a bare " +
+                 "in-memory placeholder with primitive pieces and idle motion off -- so the game stays fully " +
+                 "playable even with zero theme assets set up.")]
+        [SerializeField] private ThemeDefinition defaultTheme;
         [Header("Input")]
         [Tooltip("Defaults to Camera.main if left empty.")]
         [SerializeField] private Camera boardCamera;
@@ -77,19 +81,21 @@ namespace ThreeMusketeers.Gameplay
             // working turn/win text -- with zero setup, and it's exactly
             // what you'd get from creating a real ThemeDefinition asset and
             // not touching any of its fields.
-            if (theme == null) theme = CreateDefaultTheme();
+            if (theme == null) theme = ResolveDefaultTheme();
         }
 
         /// <summary>
-        /// The "no theme" placeholder -- same defaults as a freshly created
-        /// ThemeDefinition asset, except idle motion is off (bare placeholder
-        /// pieces shouldn't bob around with no art to justify it).
+        /// Whatever should be used when no theme has been explicitly selected:
+        /// the real `defaultTheme` asset if one's assigned, otherwise a bare
+        /// in-memory placeholder (primitive pieces, idle motion off).
         /// </summary>
-        private static ThemeDefinition CreateDefaultTheme()
+        private ThemeDefinition ResolveDefaultTheme()
         {
-            var defaultTheme = ScriptableObject.CreateInstance<ThemeDefinition>();
-            defaultTheme.pieceIdleEnabled = false;
-            return defaultTheme;
+            if (defaultTheme != null) return defaultTheme;
+
+            var placeholder = ScriptableObject.CreateInstance<ThemeDefinition>();
+            placeholder.pieceIdleEnabled = false;
+            return placeholder;
         }
 
         /// <summary>
@@ -101,13 +107,14 @@ namespace ThreeMusketeers.Gameplay
         /// from scratch every time you click it -- including reflecting
         /// whatever's currently in the Theme field.
         /// </summary>
-        [ContextMenu("Build Preview Board (Edit Mode)")]
-        private void BuildPreviewBoardInEditor()
-        {
-            if (theme == null) theme = CreateDefaultTheme();
-            BuildBoard(new BoardState());
-        }
-
+            [ContextMenu("Build Preview Board (Edit Mode)")]
+            private void BuildPreviewBoardInEditor()
+            {
+                var previousTheme = theme;
+                theme = theme != null ? theme : ResolveDefaultTheme();
+                BuildBoard(new BoardState());
+                theme = previousTheme;
+            }
         /// <summary>Full (re)build: tears down any previous board and spawns tiles + pieces matching the given state. Used on start and on restart.</summary>
        public void BuildBoard(BoardState board)
         {
@@ -141,7 +148,7 @@ namespace ThreeMusketeers.Gameplay
 
                 var tile3d = tileGo.GetComponent<Tile3D>();
                 if (tile3d == null) tile3d = tileGo.AddComponent<Tile3D>();
-                tile3d.Initialize(coord, tileGo.GetComponentInChildren<Renderer>());
+               tile3d.Initialize(coord, tileGo.GetComponentInChildren<Renderer>(), theme);
                 _tiles[coord] = tile3d;
 
                 var pieceType = board.GetPiece(coord);
@@ -190,7 +197,7 @@ namespace ThreeMusketeers.Gameplay
         /// </summary>
         public void SetTheme(ThemeDefinition newTheme)
         {
-            theme = newTheme != null ? newTheme : CreateDefaultTheme();
+            theme = newTheme != null ? newTheme : ResolveDefaultTheme();
         }
 
         public Vector3 CoordToLocalPosition(Coord coord)

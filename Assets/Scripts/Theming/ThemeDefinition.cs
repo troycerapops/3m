@@ -71,6 +71,14 @@ namespace ThreeMusketeers.Theming
         public Color defenseFallbackColor = new Color(0.25f, 0.3f, 0.4f);   // steel blue-grey
         public Color lightTileFallbackColor = new Color(0.78f, 0.76f, 0.70f);
         public Color darkTileFallbackColor = new Color(0.45f, 0.43f, 0.40f);
+        [Header("Board highlight colors")]
+        public Color selectedHighlightColor = new Color(1f, 0.85f, 0.2f, 0.7f);
+        public Color legalDestinationHighlightColor = new Color(0.4f, 0.85f, 0.4f, 0.7f);
+        [Tooltip("Subtle glow blended onto tiles holding a piece with a legal move (the 'hint' glow).")]
+        public Color ownedGlowHighlightColor = new Color(0.55f, 0.85f, 1f, 0.7f);
+        [Range(0f, 1f)]
+        [Tooltip("Strength of the owned-glow blend. 0 = no glow, 1 = solid glow color.")]
+        public float ownedGlowBlend = 0.45f;
 
         [Header("Display text")]
         public string offenseLabel = "Convicts";

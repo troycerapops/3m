@@ -37,8 +37,8 @@ namespace ThreeMusketeers.Theming
             {
                 go = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 go.transform.SetParent(parent, false);
-                // Thin flat slab with a small gap so grid lines read clearly.
-                go.transform.localScale = new Vector3(0.95f, 0.1f, 0.95f);
+                // Full-size flat slab -- tiles sit flush with no visible gap between them.
+                go.transform.localScale = new Vector3(1f, 0.1f, 1f);
                 go.transform.localPosition = new Vector3(0f, -0.05f, 0f);
 
                 // In normal use `theme` is never actually null here -- Board3DView
