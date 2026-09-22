@@ -15,9 +15,9 @@ namespace ThreeMusketeers.Gameplay
         private Renderer _renderer;
         private Color _baseColor;
 
-        private static readonly Color SelectedColor = new Color(1f, 0.85f, 0.2f);
-        private static readonly Color LegalDestinationColor = new Color(0.4f, 0.85f, 0.4f);
-        private static readonly Color OwnedGlowColor = new Color(0.55f, 0.85f, 1f); // soft sky-blue, distinct from yellow/green
+        private static readonly Color SelectedColor = new Color(1f, 0.85f, 0.2f, 0.7f);
+        private static readonly Color LegalDestinationColor = new Color(0.4f, 0.85f, 0.4f, 0.7f);
+        private static readonly Color OwnedGlowColor = new Color(0.55f, 0.85f, 1f, 0.7f);
         private const float OwnedGlowBlend = 0.45f; // 0 = no glow, 1 = solid OwnedGlowColor
 
         public void Initialize(Coord coord, Renderer renderer)

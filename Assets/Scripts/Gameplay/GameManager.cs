@@ -25,10 +25,6 @@ namespace ThreeMusketeers.Gameplay
     /// Mechanic-pack hook: pass a non-default IRuleSet into `new
     /// BoardState(customRuleSet)` in StartNewGame() to change legal moves /
     /// win conditions -- nothing else in this class needs to change.
-    ///
-    /// End-of-game animation hook: swap `_endGameAnimation` for a real
-    /// IEndGameAnimation implementation once one exists -- see
-    /// IEndGameAnimation.cs / InstantEndGameAnimation.cs.
     /// </summary>
     public class GameManager : MonoBehaviour
     {
@@ -36,20 +32,17 @@ namespace ThreeMusketeers.Gameplay
         [SerializeField] private Board3DView boardView;
         [SerializeField] private GameUIController ui;
 
-        [Header("Hint")]
-        [Tooltip("Seconds of inactivity at the start of a turn before movable pieces glow. " +
-                 "Use a small value (e.g. 0.2) while testing; ~7 is a reasonable value for real play.")]
+        [Header("Movable-piece hint")]
+        [Tooltip("How long after a turn starts before the movable-piece glow appears. Keep this small " +
+                 "(e.g. 0.3) while testing; the real game probably wants something like 5-7 seconds.")]
         [SerializeField] private float hintDelaySeconds = 0.3f;
 
         private BoardState _board;
         private Coord? _selected;
         private List<Coord> _legalDestinations;
         private bool _gameOver;
-
-        private Coroutine _hintCoroutine;
         private bool _hintRevealed;
-
-        private IEndGameAnimation _endGameAnimation = new InstantEndGameAnimation();
+        private Coroutine _hintCoroutine;
 
         private void Start()
         {
@@ -72,14 +65,20 @@ namespace ThreeMusketeers.Gameplay
             _legalDestinations = null;
             _gameOver = false;
 
+            if (_hintCoroutine != null) StopCoroutine(_hintCoroutine);
+            // The opening turn shows its hint immediately -- no reason to
+            // make the player wait to see their first move.
+            _hintRevealed = true;
+
             boardView.BuildBoard(_board);
             boardView.SetBoardInteractable(true);
-
-            // Show the opening move immediately -- only mid-game turns wait
-            // out hintDelaySeconds (see RestartHintTimer, called from ApplyMove).
-            if (_hintCoroutine != null) StopCoroutine(_hintCoroutine);
-            _hintRevealed = true;
             RefreshSelectionVisual();
+
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.ApplyTheme(boardView.Theme);
+                AudioManager.Instance.SetIntense(false);
+            }
 
             if (ui != null)
             {
@@ -144,8 +143,12 @@ namespace ThreeMusketeers.Gameplay
 
         private void ApplyMove(Move move)
         {
+            bool isCapture = _board.GetPiece(move.To) != PieceType.None;
+
             _board.ApplyMove(move);
             boardView.ApplyMoveVisual(move);
+
+            if (isCapture && AudioManager.Instance != null) AudioManager.Instance.PlayCaptureSound();
 
             var result = _board.EvaluateResult();
 
@@ -165,24 +168,30 @@ namespace ThreeMusketeers.Gameplay
                 }
             }
 
-            if (result == GameResult.InProgress)
+            if (result != GameResult.InProgress)
             {
+                _gameOver = true;
+                boardView.SetBoardInteractable(false);
+                RefreshSelectionVisual();
+                if (ui != null) ui.ShowGameOver(ResolveWinText(result));
+                if (AudioManager.Instance != null) AudioManager.Instance.PlayWinSound(result);
+            }
+            else
+            {
+                // A new turn just started -- restart the hint-glow delay for it.
                 RestartHintTimer();
                 RefreshSelectionVisual();
-                if (ui != null) ui.SetTurnText(ResolveTurnText());
-                return;
-            }
 
-            // Game just ended: freeze input immediately, then let the
-            // end-game animation seam run (today: InstantEndGameAnimation,
-            // which completes synchronously) before showing the win overlay.
-            _gameOver = true;
-            boardView.SetBoardInteractable(false);
-            RefreshSelectionVisual();
-            _endGameAnimation.Play(_board, result, boardView, () =>
-            {
-                if (ui != null) ui.ShowGameOver(ResolveWinText(result));
-            });
+                if (ui != null) ui.SetTurnText(ResolveTurnText());
+                if (AudioManager.Instance != null)
+                {
+                    // Starter heuristic for "things are getting tense" -- few
+                    // captures left for the side to move, or guards thinning
+                    // out. Tune the thresholds once you've actually played it.
+                    bool intense = _board.GetLegalMoves(_board.CurrentPlayer).Count <= 2 || _board.DefenseCount() <= 8;
+                    AudioManager.Instance.SetIntense(intense);
+                }
+            }
         }
 
         private void RestartHintTimer()
@@ -201,18 +210,9 @@ namespace ThreeMusketeers.Gameplay
 
         private void RefreshSelectionVisual()
         {
-            // Only compute (and show) the movable-piece glow once the hint
-            // delay has actually elapsed for this turn; before that, pass
-            // null so nothing glows.
-            List<Coord> movablePieces = null;
-            if (_hintRevealed)
-            {
-                movablePieces = _board.GetLegalMoves(_board.CurrentPlayer)
-                    .Select(m => m.From)
-                    .Distinct()
-                    .ToList();
-            }
-
+            List<Coord> movablePieces = _hintRevealed
+                ? _board.GetLegalMoves(_board.CurrentPlayer).Select(m => m.From).Distinct().ToList()
+                : null;
             boardView.SetSelection(_selected, _legalDestinations, movablePieces);
         }
 

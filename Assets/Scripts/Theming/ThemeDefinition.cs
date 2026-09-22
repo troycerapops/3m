@@ -38,10 +38,33 @@ namespace ThreeMusketeers.Theming
         [Header("Optional environment/set-dressing, spawned once at the board root")]
         public GameObject environmentPrefab;
 
-        [Tooltip("Set true only if environmentPrefab brings its own light source(s) (imported from " +
-                 "Blender with the FBX importer's \"Import Lights\" option enabled). When true, " +
-                 "Board3DView disables its Default Scene Lights while this theme is active.")]
-        public bool suppliesOwnLighting = false;
+        public bool wholeBoardArt = false;   // whole assembled board vs per-tile art
+        public bool suppliesOwnLighting = false;  // theme brings its own Light sources
+
+        [Header("Piece animation (optional -- only used if a piece prefab has its own Animator)")]
+        [Tooltip("Turns off all idle motion (Animator-driven or the built-in procedural bob) for pieces using " +
+                 "this theme. Real theme assets default to true; the default (no-theme) placeholder theme sets " +
+                 "this to false automatically -- see Board3DView's fallback theme creation.")]
+        public bool pieceIdleEnabled = true;
+        [Tooltip("How many distinct idle animation variants the Animator Controller defines ...")]
+        public int idleVariantCount = 1;
+
+        [Tooltip("Idle reshuffles to a new (random) variant on a random timer in this range, in seconds.")]
+        public float idleIntervalMin = 3f;
+        public float idleIntervalMax = 7f;
+        [Tooltip("Seconds to wait after a captured piece starts its removal animation before the capturing piece begins sliding in. 0 = simultaneous (old behavior). Tune per-theme to match how long your Captured animation clip actually takes.")]
+        public float captureLeadTime = 0.05f;
+        [Header("Audio (optional -- silent if left empty)")]
+        [Tooltip("Background music -- shuffled and played back-to-back for the whole game.")]
+        public AudioClip[] soundtrackPlaylist;
+        [Tooltip("Optional single track swapped in for tense moments (see GameManager's intensity check). " +
+                 "Leave empty to just keep playing the normal playlist through tense moments too.")]
+        public AudioClip intenseTrack;
+        public AudioClip captureSound;
+        [Tooltip("Played when Offense wins.")]
+        public AudioClip offenseWinSound;
+        [Tooltip("Played when Defense wins.")]
+        public AudioClip defenseWinSound;
 
         [Header("Fallback colors (used only when the matching prefab/material above is empty)")]
         public Color offenseFallbackColor = new Color(0.85f, 0.75f, 0.35f); // prison jumpsuit-ish tan/orange by default

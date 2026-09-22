@@ -44,9 +44,9 @@ namespace ThreeMusketeers.Gameplay
         [SerializeField] private float cellSize = 1f;
 
         [Header("Lighting")]
-        [Tooltip("The scene's default light(s) (e.g. the Directional Light). Disabled automatically " +
-                 "whenever the active theme sets suppliesOwnLighting = true; re-enabled otherwise. " +
-                 "Leave empty if you don't need this yet -- nothing else depends on it.")]
+        [Tooltip("The scene's default light(s) (e.g. the Directional Light) -- switched off automatically " +
+                 "when the active theme supplies its own (ThemeDefinition.suppliesOwnLighting), and back on " +
+                 "otherwise.")]
         [SerializeField] private Light[] defaultSceneLights;
 
         private Transform _boardRoot;
@@ -58,10 +58,10 @@ namespace ThreeMusketeers.Gameplay
         private bool _inputEnabled = true;
 
         /// <summary>
-        /// Transforms found under the environment prefab whose name starts with
-        /// "ExitPoint" (e.g. "ExitPoint_North") -- see Blender_Art_Spec.md. Empty
-        /// until a theme with an environment prefab containing such markers is
-        /// active. Consumed by future IEndGameAnimation implementations.
+        /// Every child of the environment prefab whose name starts with
+        /// "ExitPoint" (case-insensitive) -- see the art spec. Empty until
+        /// a theme with an environment prefab has been built. For a future
+        /// end-of-game animation to target.
         /// </summary>
         public IReadOnlyList<Transform> ExitPoints => _exitPoints;
 
@@ -77,16 +77,50 @@ namespace ThreeMusketeers.Gameplay
             // working turn/win text -- with zero setup, and it's exactly
             // what you'd get from creating a real ThemeDefinition asset and
             // not touching any of its fields.
-            if (theme == null) theme = ScriptableObject.CreateInstance<ThemeDefinition>();
+            if (theme == null) theme = CreateDefaultTheme();
+        }
+
+        /// <summary>
+        /// The "no theme" placeholder -- same defaults as a freshly created
+        /// ThemeDefinition asset, except idle motion is off (bare placeholder
+        /// pieces shouldn't bob around with no art to justify it).
+        /// </summary>
+        private static ThemeDefinition CreateDefaultTheme()
+        {
+            var defaultTheme = ScriptableObject.CreateInstance<ThemeDefinition>();
+            defaultTheme.pieceIdleEnabled = false;
+            return defaultTheme;
+        }
+
+        /// <summary>
+        /// Right-click this component in the Inspector -> "Build Preview
+        /// Board (Edit Mode)" to spawn a fresh starting-position board
+        /// without pressing Play, so you can check theme art / camera
+        /// framing / layout while just editing the scene. It won't
+        /// animate or respond to taps (that needs Play), and it's rebuilt
+        /// from scratch every time you click it -- including reflecting
+        /// whatever's currently in the Theme field.
+        /// </summary>
+        [ContextMenu("Build Preview Board (Edit Mode)")]
+        private void BuildPreviewBoardInEditor()
+        {
+            if (theme == null) theme = CreateDefaultTheme();
+            BuildBoard(new BoardState());
         }
 
         /// <summary>Full (re)build: tears down any previous board and spawns tiles + pieces matching the given state. Used on start and on restart.</summary>
-        public void BuildBoard(BoardState board)
+       public void BuildBoard(BoardState board)
         {
-            if (_boardRoot != null) Destroy(_boardRoot.gameObject);
+
+            var existingBoardRoot = transform.Find("BoardRoot");
+            if (existingBoardRoot != null)
+            {
+                if (Application.isPlaying) Destroy(existingBoardRoot.gameObject);
+                else DestroyImmediate(existingBoardRoot.gameObject);
+            }
+
             _tiles.Clear();
             _pieces.Clear();
-            _exitPoints.Clear();
 
             _boardRoot = new GameObject("BoardRoot").transform;
             _boardRoot.SetParent(transform, false);
@@ -94,6 +128,7 @@ namespace ThreeMusketeers.Gameplay
             _tilesRoot.SetParent(_boardRoot, false);
             _piecesRoot = new GameObject("Pieces").transform;
             _piecesRoot.SetParent(_boardRoot, false);
+
 
             for (int x = 0; x < BoardState.BoardSize; x++)
             for (int y = 0; y < BoardState.BoardSize; y++)
@@ -114,19 +149,19 @@ namespace ThreeMusketeers.Gameplay
                     SpawnPiece(pieceType, coord);
             }
 
+            _exitPoints.Clear();
             if (theme != null && theme.environmentPrefab != null)
             {
                 var env = Instantiate(theme.environmentPrefab, _boardRoot);
-bool themeSuppliesLighting = theme != null && theme.suppliesOwnLighting;
-foreach (var light in defaultSceneLights)
-    if (light != null) light.enabled = !themeSuppliesLighting;
-                // Collect artist-placed exit/anchor markers (any child named
-                // "ExitPoint*") for future end-of-game animations. See
-                // Blender_Art_Spec.md for the naming convention.
                 foreach (var child in env.GetComponentsInChildren<Transform>(true))
                     if (child.name.StartsWith("ExitPoint", StringComparison.OrdinalIgnoreCase))
                         _exitPoints.Add(child);
             }
+
+            bool suppliesOwnLighting = theme != null && theme.suppliesOwnLighting;
+            if (defaultSceneLights != null)
+                foreach (var light in defaultSceneLights)
+                    if (light != null) light.enabled = !suppliesOwnLighting;
         }
 
         private void SpawnPiece(PieceType type, Coord coord)
@@ -144,15 +179,20 @@ foreach (var light in defaultSceneLights)
 
             var view = pieceGo.GetComponent<PieceView3D>();
             if (view == null) view = pieceGo.AddComponent<PieceView3D>();
-            view.Initialize(type, coord);
+            view.Initialize(type, coord, theme);
             _pieces[coord] = view;
         }
 
         /// <summary>
-        /// Pure formula, no bounds-checking -- works for any integer coordinate,
-        /// including cells outside the playable 5x5 grid (see BorderLayout), so
-        /// border/exit-related code needs no special-casing here.
+        /// Swaps the active theme -- called by the menu's Theme Select
+        /// panel. Doesn't rebuild anything itself; takes effect on the next
+        /// BuildBoard() call, so it's safe to call before a game exists.
         /// </summary>
+        public void SetTheme(ThemeDefinition newTheme)
+        {
+            theme = newTheme != null ? newTheme : CreateDefaultTheme();
+        }
+
         public Vector3 CoordToLocalPosition(Coord coord)
         {
             float half = (BoardState.BoardSize - 1) / 2f;
@@ -166,7 +206,13 @@ foreach (var light in defaultSceneLights)
         /// </summary>
         public void ApplyMoveVisual(Move move)
         {
-            if (_pieces.TryGetValue(move.To, out var captured))
+            // A piece already sitting at the destination means this move is
+            // a capture -- this is also what tells the mover which of the
+            // Movement/Capture animation states to play (see PieceView3D).
+            bool isCapture = _pieces.TryGetValue(move.To, out var captured);
+        Debug.Log($"[CaptureDebug] move {move.From} -> {move.To}, isCapture={isCapture}, pieceAtTo={(captured != null ? captured.Type.ToString() : "null")}");
+
+            if (isCapture)
             {
                 captured.AnimateCapturedThenDestroy();
                 _pieces.Remove(move.To);
@@ -177,7 +223,8 @@ foreach (var light in defaultSceneLights)
                 _pieces.Remove(move.From);
                 var cellLocal = CoordToLocalPosition(move.To);
                 var targetPos = new Vector3(cellLocal.x, mover.transform.localPosition.y, cellLocal.z);
-                mover.AnimateTo(move.To, targetPos);
+                float leadTime = isCapture && theme != null ? theme.captureLeadTime : 0f;
+                mover.AnimateTo(move.To, targetPos, isCapture, leadTime);
                 _pieces[move.To] = mover;
             }
             else
@@ -187,11 +234,10 @@ foreach (var light in defaultSceneLights)
         }
 
         /// <summary>
-        /// movablePieces: coordinates of pieces GameManager wants glowing as a
-        /// "you can move this" hint (already filtered to the current player's
-        /// pieces that actually have a legal move right now, and to only
-        /// appear once GameManager's hint delay has elapsed). Pass null to
-        /// show no hint glow at all.
+        /// <paramref name="movablePieces"/> is the (hint-delay-gated) set of
+        /// coords holding a piece the current player could move right now --
+        /// GameManager only passes a non-null list once its hint timer has
+        /// elapsed. Null/empty just means "no glow yet."
         /// </summary>
         public void SetSelection(Coord? selected, IReadOnlyList<Coord> legalDestinations, IReadOnlyList<Coord> movablePieces)
         {
@@ -228,11 +274,18 @@ foreach (var light in defaultSceneLights)
             var ray = boardCamera.ScreenPointToRay(screenPos);
             if (Physics.Raycast(ray, out var hitInfo, Mathf.Infinity, tileRaycastMask))
             {
-                var piece = hitInfo.collider.GetComponentInParent<PieceView3D>();
-                if (piece != null) { CellClicked?.Invoke(piece.Coord); return; }
-
                 var tile = hitInfo.collider.GetComponentInParent<Tile3D>();
-                if (tile != null) CellClicked?.Invoke(tile.Coord);
+                if (tile != null)
+                {
+                    CellClicked?.Invoke(tile.Coord);
+                    return;
+                }
+
+                // A tap can land on a piece's own collider instead of the
+                // tile underneath it (pieces sit visually on top) -- fall
+                // back to whichever cell the piece itself says it's on.
+                var piece = hitInfo.collider.GetComponentInParent<PieceView3D>();
+                if (piece != null) CellClicked?.Invoke(piece.Coord);
             }
         }
     }

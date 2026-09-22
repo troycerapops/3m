@@ -14,16 +14,28 @@ namespace ThreeMusketeers.UI
     [RequireComponent(typeof(RectTransform))]
     public class GameUIController : MonoBehaviour
     {
+
+        /// <summary>
+        /// How many pixels of unsafe space (notch, status bar, camera
+        /// cutout, etc.) sit at the very top of the screen on this device.
+        /// 0 on a plain rectangular display. Used to keep top-anchored UI
+        /// clear of it automatically, on whatever phone this runs on.
+        /// </summary>
+        private static float TopSafeInset => Screen.height - Screen.safeArea.yMax;
         public event Action RestartRequested;
 
         private Text _turnText;
         private GameObject _gameOverPanel;
         private Text _gameOverText;
 
+        [Header("Scene references")]
+        [SerializeField] private MainMenuController mainMenu;
+
         private void Awake()
         {
             BuildTurnLabel();
             BuildGameOverPanel();
+            BuildMenuButton();
         }
 
       private void BuildTurnLabel()
@@ -35,7 +47,10 @@ namespace ThreeMusketeers.UI
             barRect.anchorMax = new Vector2(1f, 1f);
             barRect.pivot = new Vector2(0.5f, 1f);
             barRect.sizeDelta = new Vector2(0f, 120f);
-            barRect.anchoredPosition = Vector2.zero; // flush against the very top edge
+            // Push the bar down clear of the device's notch/status bar/
+            // camera cutout, plus a little extra breathing room beyond
+            // that so it's not sitting flush against the safe edge either.
+            barRect.anchoredPosition = new Vector2(0f, -(TopSafeInset + 20f));
             bar.AddComponent<Image>().color = Color.white;
 
             var go = new GameObject("TurnText", typeof(RectTransform));
@@ -44,7 +59,7 @@ namespace ThreeMusketeers.UI
             rect.anchorMin = Vector2.zero;
             rect.anchorMax = Vector2.one;
             rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
+            rect.offsetMax = new Vector2(-120f, 0f);
 
             _turnText = go.AddComponent<Text>();
             _turnText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -55,6 +70,46 @@ namespace ThreeMusketeers.UI
             _turnText.resizeTextMinSize = 24;
             _turnText.resizeTextMaxSize = 48;
         }
+
+        /// <summary>
+        /// Small square button, fixed to the top-right corner regardless of
+        /// screen size, that reopens the Main Menu over the board mid-game.
+        /// Drawn as three plain bars (the classic hamburger glyph) rather
+        /// than a font character, so it doesn't depend on the font having
+        /// that symbol -- swap in a real icon sprite later the same way
+        /// every other placeholder visual in this project gets swapped.
+        /// </summary>
+        private void BuildMenuButton()
+        {
+            var buttonGo = new GameObject("MenuButton", typeof(RectTransform));
+            buttonGo.transform.SetParent(transform, false);
+            var buttonRect = buttonGo.GetComponent<RectTransform>();
+            buttonRect.anchorMin = new Vector2(1f, 1f);
+            buttonRect.anchorMax = new Vector2(1f, 1f);
+            buttonRect.pivot = new Vector2(1f, 1f);
+            buttonRect.sizeDelta = new Vector2(90f, 90f);
+            buttonRect.anchoredPosition = new Vector2(-15f, -(TopSafeInset + 15f));
+            var buttonImage = buttonGo.AddComponent<Image>();
+            buttonImage.color = new Color(0.15f, 0.15f, 0.15f, 0.85f);
+            var button = buttonGo.AddComponent<Button>();
+            button.targetGraphic = buttonImage;
+            button.onClick.AddListener(() => { if (mainMenu != null) mainMenu.Open(); });
+
+            float[] barY = { 20f, 40f, 60f };
+            foreach (var y in barY)
+            {
+                var barGo = new GameObject("Bar", typeof(RectTransform));
+                barGo.transform.SetParent(buttonGo.transform, false);
+                var barRect = barGo.GetComponent<RectTransform>();
+                barRect.anchorMin = new Vector2(0.2f, 0f);
+                barRect.anchorMax = new Vector2(0.8f, 0f);
+                barRect.pivot = new Vector2(0.5f, 0f);
+                barRect.sizeDelta = new Vector2(0f, 10f);
+                barRect.anchoredPosition = new Vector2(0f, y);
+                barGo.AddComponent<Image>().color = Color.white;
+            }
+        }
+
         private void BuildGameOverPanel()
         {
             _gameOverPanel = new GameObject("GameOverPanel", typeof(RectTransform));
