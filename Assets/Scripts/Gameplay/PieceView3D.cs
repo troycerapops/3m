@@ -45,6 +45,7 @@ namespace ThreeMusketeers.Gameplay
         [SerializeField] private float landingJiggleAmplitude = 0.5f;
 
         [Header("Other reactions")]
+        [Tooltip("Unrigged pieces only (no Animator/Controller) -- how long the plain fallback capture reaction takes before the piece is destroyed. Rigged pieces ignore this entirely -- see DestroyAfterCapture().")]
         [SerializeField] private float captureFadeDuration = 0.2f;
         [SerializeField] private float selectPulseDuration = 0.12f;
         [SerializeField] private float idleBobHeight = 0.05f;
@@ -121,30 +122,56 @@ namespace ThreeMusketeers.Gameplay
             StartCoroutine(MoveRoutine(targetLocalPosition, isCapture, delay));
         }
 
-        /// <summary>Plays a brief "captured" reaction, then destroys this piece.</summary>
-            public void AnimateCapturedThenDestroy()
-            {
-                StopAllCoroutines();
-                _busy = true;
-                if (_animator != null && _animator.runtimeAnimatorController != null)
-                    _animator.SetTrigger(CapturedTrigger);
+        /// <summary>
+        /// Plays a brief "captured" reaction, then destroys this piece.
+        /// Rigged pieces own their own timing entirely from here on -- add
+        /// an Animation Event on the last frame of whatever clip plays for
+        /// the Captured trigger that calls DestroyAfterCapture() below, so
+        /// the clip itself (not a guessed number in code) decides when the
+        /// piece actually disappears. Unrigged (placeholder primitive)
+        /// pieces have no clip to defer to, so they still use the simple
+        /// timed fallback in CaptureRoutine.
+        /// </summary>
+        public void AnimateCapturedThenDestroy()
+        {
+            StopAllCoroutines();
+            _busy = true;
+            bool rigged = _animator != null && _animator.runtimeAnimatorController != null;
+            if (rigged)
+                _animator.SetTrigger(CapturedTrigger);
+            else
                 StartCoroutine(CaptureRoutine());
-            }
+        }
+
+        /// <summary>
+        /// Hook this up as an Animation Event on the last frame of a rigged
+        /// piece's Captured/Death clip (select the clip on the FBX's
+        /// Animation import tab, scrub to its last frame, Add Event, set
+        /// Function to DestroyAfterCapture). Not called automatically for
+        /// unrigged pieces -- those go through CaptureRoutine instead.
+        /// </summary>
+        public void DestroyAfterCapture()
+        {
+            Destroy(gameObject);
+        }
 
         private IEnumerator MoveRoutine(Vector3 targetLocalPosition, bool isCapture, float delay)
         {
             if (delay > 0f) yield return new WaitForSeconds(delay);
 
-            if (_animator != null) _animator.SetTrigger(isCapture ? CaptureTrigger : MoveTrigger);
+            bool rigged = _animator != null && _animator.runtimeAnimatorController != null;
+            if (rigged) _animator.SetTrigger(isCapture ? CaptureTrigger : MoveTrigger);
 
             // Every slide gets the stretch/squish/jiggle, capture or not,
-            // when there's no rigged Animator -- driven by move progress so
-            // it plays out DURING the slide (taller as it sets off, shorter
-            // partway across, a couple of decaying wobbles, settled by
-            // arrival), not as a separate step tacked on after landing. A
-            // rigged piece's own Move/Capture clip is presumed to already
-            // sell the motion, so this only runs for the unrigged fallback.
-            bool jiggle = _animator == null;
+            // when there's no rigged Animator (or one with no Controller
+            // assigned yet -- see PlaySelectReaction for why that matters)
+            // -- driven by move progress so it plays out DURING the slide
+            // (taller as it sets off, shorter partway across, a couple of
+            // decaying wobbles, settled by arrival), not as a separate step
+            // tacked on after landing. A rigged piece's own Move/Capture
+            // clip is presumed to already sell the motion, so this only
+            // runs for the unrigged fallback.
+            bool jiggle = !rigged;
             float jiggleFrequency = landingJiggleCycles * 2f * Mathf.PI;
             Vector3 start = transform.localPosition;
             Vector3 baseScale = transform.localScale;
@@ -174,16 +201,15 @@ namespace ThreeMusketeers.Gameplay
             RestartIdle();
         }
 
+        /// <summary>
+        /// No shrink/fade -- the piece just stays full size until it's
+        /// removed. captureFadeDuration is kept as the pause length so
+        /// timing (relative to the capturing piece's own move/animation)
+        /// doesn't shift now that there's no visual to time it against.
+        /// </summary>
         private IEnumerator CaptureRoutine()
         {
-            Vector3 startScale = transform.localScale;
-            float t = 0f;
-            while (t < captureFadeDuration)
-            {
-                t += Time.deltaTime;
-                transform.localScale = Vector3.Lerp(startScale, Vector3.zero, Mathf.Clamp01(t / captureFadeDuration));
-                yield return null;
-            }
+            yield return new WaitForSeconds(captureFadeDuration);
             Destroy(gameObject);
         }
 
@@ -213,7 +239,7 @@ namespace ThreeMusketeers.Gameplay
                 yield return new WaitForSeconds(Random.Range(min, max));
                 if (_busy) continue; // a real move/capture is in charge of the transform right now
 
-                if (_animator != null)
+                if (_animator != null && _animator.runtimeAnimatorController != null)
                 {
                     _animator.SetInteger(IdleVariantParam, Random.Range(0, variantCount));
                     _animator.SetTrigger(IdleTrigger);

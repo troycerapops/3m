@@ -30,6 +30,17 @@ namespace ThreeMusketeers.Theming
         [Tooltip("The many slide-to-empty pieces, e.g. prison guards.")]
         public GameObject defensePrefab;
 
+        [Header("Piece orientation fix-up")]
+        [Tooltip("Extra Y-axis rotation (degrees) applied to the Offense prefab right after it's spawned. " +
+                 "Different asset packs export facing different directions -- some models come in facing " +
+                 "away from this game's fixed camera angle, so this is the knob to spin them around without " +
+                 "touching the prefab itself. 180 is the common fix for a model facing straight away. 0 = " +
+                 "no change (use this if a pack already faces the right way).")]
+        public float offensePieceYRotation = 0f;
+        [Tooltip("Same as Offense Piece Y Rotation above, but for the Defense prefab -- set independently " +
+                 "since two different models/packs can face two different ways.")]
+        public float defensePieceYRotation = 0f;
+
         [Header("Tile prefab (leave empty for a placeholder flat cube)")]
         [Tooltip("A single tile mesh; light/dark squares are the same prefab with different materials.")]
         public GameObject tilePrefab;
@@ -77,13 +88,25 @@ namespace ThreeMusketeers.Theming
         public Color darkTileFallbackColor = new Color(0.45f, 0.43f, 0.40f);
 
         [Header("Board highlight colors")]
-        public Color selectedHighlightColor = new Color(1f, 0.85f, 0.2f, 0.7f);
-        public Color legalDestinationHighlightColor = new Color(0.4f, 0.85f, 0.4f, 0.7f);
+        public Color selectedHighlightColor = new Color(0.549f, 0.851f, 1f, 1f);
+        public Color legalDestinationHighlightColor = new Color(0.651f, 0.925f, 0.651f, 1f);
         [Tooltip("Subtle glow blended onto tiles holding a piece with a legal move (the 'hint' glow).")]
-        public Color ownedGlowHighlightColor = new Color(0.55f, 0.85f, 1f, 0.7f);
+        public Color ownedGlowHighlightColor = new Color(1f, 0.733f, 0.2f, 1f);
         [Range(0f, 1f)]
         [Tooltip("Strength of the owned-glow blend. 0 = no glow, 1 = solid glow color.")]
-        public float ownedGlowBlend = 0.45f;
+        public float ownedGlowBlend = 0.8f;
+
+        [Header("Camera background")]
+        [Tooltip("Solid fallback color behind the board -- always applied to Board3DView's Board Camera as " +
+                 "its clear color (Clear Flags gets set to Solid Color automatically). Used as-is when " +
+                 "Background Image below is left empty, and kept as a safety-net backdrop even when it's " +
+                 "not (in case the image doesn't perfectly cover the screen on some aspect ratio).")]
+        public Color backgroundColor = new Color(0.75f, 0.78f, 0.82f);
+        [Tooltip("Optional full backdrop image/art for this theme pack (e.g. a painted prison yard, a " +
+                 "cell block) -- drawn behind the whole board, stretched to exactly fill the camera's view. " +
+                 "Author it at your target screen's aspect ratio (portrait, matching the game's orientation " +
+                 "lock) for the cleanest result. Leave empty to just use the solid Background Color above.")]
+        public Sprite backgroundImage;
 
         [Header("Display text")]
         public string offenseLabel = "Offense";
@@ -141,5 +164,8 @@ namespace ThreeMusketeers.Theming
 
         public Color GetPieceFallbackColor(PieceType type) =>
             type == PieceType.Offense ? offenseColor : defenseColor;
+
+        public float GetPieceYRotation(PieceType type) =>
+            type == PieceType.Offense ? offensePieceYRotation : defensePieceYRotation;
     }
 }

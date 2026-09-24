@@ -46,8 +46,12 @@ namespace ThreeMusketeers.Gameplay
 
         private void Start()
         {
-            StartNewGame();
-
+            // Deliberately does NOT call StartNewGame() here -- that used to
+            // build the board and set turn text the instant the scene
+            // loaded, which showed through underneath the (only ~92%
+            // opaque) menu. Now the game only actually starts once
+            // MainMenuController's Play button calls StartNewGame() itself
+            // (see MainMenuController.OnStartGame).
             boardView.CellClicked += HandleCellClicked;
             if (ui != null) ui.RestartRequested += StartNewGame;
         }
@@ -85,7 +89,12 @@ namespace ThreeMusketeers.Gameplay
 
         private void HandleCellClicked(Coord coord)
         {
-            if (_gameOver) return;
+            // Defensive: the menu's full-screen panel blocks board taps
+            // (see Board3DView.Update's IsPointerOverGameObject check)
+            // until Play is pressed, but this guards against a stray event
+            // reaching here before _board exists, e.g. right after Restart
+            // if that path is ever wired up before StartNewGame() runs.
+            if (_board == null || _gameOver) return;
 
             var clickedPiece = _board.GetPiece(coord);
             var currentPieceType = _board.CurrentPlayer.ToPieceType();

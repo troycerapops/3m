@@ -37,8 +37,8 @@ namespace ThreeMusketeers.Theming
             {
                 go = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 go.transform.SetParent(parent, false);
-                // Full-size flat slab -- tiles sit flush with no visible gap between them.
-                go.transform.localScale = new Vector3(1f, 0.1f, 1f);
+                // Thin flat slab with a small gap so grid lines read clearly.
+                go.transform.localScale = new Vector3(0.95f, 0.1f, 0.95f);
                 go.transform.localPosition = new Vector3(0f, -0.05f, 0f);
 
                 // In normal use `theme` is never actually null here -- Board3DView
@@ -100,6 +100,12 @@ namespace ThreeMusketeers.Theming
             if (prefab != null)
             {
                 go = Object.Instantiate(prefab, parent);
+                // See ThemeDefinition.offense/defensePieceYRotation -- spins the
+                // model around its own Y axis on top of whatever rotation the
+                // prefab shipped with, to fix packs that face the wrong way
+                // relative to this game's fixed camera angle.
+                float yRotation = theme != null ? theme.GetPieceYRotation(type) : 0f;
+                if (yRotation != 0f) go.transform.Rotate(0f, yRotation, 0f, Space.Self);
             }
             else
             {

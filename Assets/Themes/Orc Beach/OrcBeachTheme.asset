@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27141471782b0764ea97af9b1a93b392, type: 3}
+  m_Name: OrcBeachTheme
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeMusketeers.Theming.ThemeDefinition
+  themeId: orcBeach
+  displayName: Orc Beach
+  offensePrefab: {fileID: 7884916033826614524, guid: e0123b5af01a2104b9fcafbb6fbeb60f, type: 3}
+  defensePrefab: {fileID: 9218395048001069724, guid: cc2c74718e5c52d42900081937b89f5c, type: 3}
+  offensePieceYRotation: 180
+  defensePieceYRotation: 180
+  tilePrefab: {fileID: 0}
+  lightTileMaterial: {fileID: 0}
+  darkTileMaterial: {fileID: 0}
+  environmentPrefab: {fileID: 0}
+  wholeBoardArt: 0
+  suppliesOwnLighting: 0
+  pieceIdleEnabled: 1
+  idleVariantCount: 1
+  idleIntervalMin: 3
+  idleIntervalMax: 7
+  captureLeadTime: 0.15
+  soundtrackPlaylist:
+  - {fileID: 8300000, guid: fca5df6cdef876d4ebb7feccc1f536b5, type: 3}
+  - {fileID: 8300000, guid: 5a4d895782ecf2d4d89ff2556258e181, type: 3}
+  - {fileID: 8300000, guid: f43f6fe5c84cdbe45b0843ba3eaf2677, type: 3}
+  movementSound: {fileID: 8300000, guid: d5f59ba5249852146a9555fd59097570, type: 3}
+  captureSound: {fileID: 8300000, guid: 0078836496744224a92e7d0d9ad388b8, type: 3}
+  selectPieceSound: {fileID: 8300000, guid: 4624207d2c991184f9fe228f9d400d60, type: 3}
+  offenseWinSound: {fileID: 8300000, guid: 25497c8bddc73e84b8a79014e4257b7a, type: 3}
+  defenseWinSound: {fileID: 8300000, guid: 9283938ea9f5225458e4d626f5485619, type: 3}
+  offenseColor: {r: 0.7176471, g: 0.40784317, b: 0.36862746, a: 1}
+  defenseColor: {r: 0.5137255, g: 0.73333335, b: 0.42352945, a: 1}
+  lightTileFallbackColor: {r: 0.78, g: 0.76, b: 0.7, a: 1}
+  darkTileFallbackColor: {r: 0.45, g: 0.43, b: 0.4, a: 1}
+  selectedHighlightColor: {r: 0.54901963, g: 0.85, b: 1, a: 0.6509804}
+  legalDestinationHighlightColor: {r: 0.6509804, g: 0.9254902, b: 0.6509804, a: 0.627451}
+  ownedGlowHighlightColor: {r: 1, g: 0.73333335, b: 0.2, a: 1}
+  ownedGlowBlend: 0.45
+  backgroundColor: {r: 0.75, g: 0.78, b: 0.82, a: 1}
+  backgroundImage: {fileID: 1615738901408681421, guid: 901f7b48db1476a4e853b80a30237fd3, type: 3}
+  offenseLabel: Crab
+  defenseLabel: Orc
+  offenseTurnText: Tap a {Label}, then tap a nearby {OpponentLabel} to get them off your beach!
+  defenseTurnText: Tap an {Label} to run from a terrible {OpponentLabel}!
+  offenseWinText: The {Label}s are victorious! The beach is theirs!
+  defenseWinText: The {Label}s triumph! The beach is now theirs!

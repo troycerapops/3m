@@ -26,10 +26,109 @@ namespace ThreeMusketeers.UI
     /// needs to know which sprite you picked. Any button/title sprite left
     /// empty falls back to a flat colored rectangle / plain text, so the
     /// menu is fully usable before any art exists.
+    ///
+    /// The denser Inspector sections below (button art, per-button height
+    /// fix-ups, layout, background, text) are grouped into small
+    /// [System.Serializable] classes -- Unity renders each of those as its
+    /// own collapsible foldout automatically, no custom Editor required, so
+    /// you can fold away whichever groups you're not currently tuning.
     /// </summary>
     [RequireComponent(typeof(RectTransform))]
     public class MainMenuController : MonoBehaviour
     {
+        [Serializable]
+        public class ButtonArtSettings
+        {
+            public Sprite selectThemeButtonSprite;
+            public Sprite startGameButtonSprite; // "Play" in the UI
+            public Sprite settingsButtonSprite;
+            public Sprite quitButtonSprite;
+            public Sprite resumeButtonSprite;
+            public Sprite goToMainMenuButtonSprite;
+            [Tooltip("Shared by every \"Back\" button (Select Theme panel, Settings panel) -- they're the " +
+                     "same action everywhere, so one field covers both rather than duplicating it.")]
+            public Sprite backButtonSprite;
+            [Tooltip("Shared by every entry in the Select Theme list, whatever themes you've assigned above " +
+                     "-- there's one button per ThemeDefinition, generated at runtime, so they can't each get " +
+                     "their own named field the way the fixed menu buttons above do.")]
+            public Sprite themeListButtonSprite;
+        }
+
+        [Serializable]
+        public class ButtonHeightOverrides
+        {
+            [Tooltip("Only touch these if one button's art has different native proportions than the rest " +
+                     "-- e.g. a toggle-switch graphic next to plain pill buttons -- and ends up a " +
+                     "mismatched height as a result. 1 = no change. Multiplies on top of Button Height " +
+                     "Scale in Button Layout, which still applies to every button at once.")]
+            public float selectThemeButtonHeightScale = 1f;
+            public float startGameButtonHeightScale = 1f;
+            public float settingsButtonHeightScale = 1f;
+            public float quitButtonHeightScale = 1f;
+            public float resumeButtonHeightScale = 1f;
+            public float goToMainMenuButtonHeightScale = 1f;
+            public float themeListButtonHeightScale = 1f;
+        }
+
+        [Serializable]
+        public class ButtonLayoutSettings
+        {
+            [Range(0.1f, 1f)]
+            [Tooltip("How wide each button stack is, as a fraction of the panel's width, centered.")]
+            public float buttonWidthFraction = 0.5f;
+            [Range(0f, 0.05f)]
+            [Tooltip("Vertical gap between buttons in a stack, as a fraction of the panel's height -- not a " +
+                     "raw pixel/unit count, so it looks the same regardless of your Canvas's resolution or " +
+                     "Scaler settings. Applies everywhere -- Home, Pause, the Select Theme list, Settings.")]
+            public float buttonSpacingFraction = 0.015f;
+            [Range(0.5f, 2f)]
+            [Tooltip("Multiplies every button's height WITHOUT touching its width -- independent of Button " +
+                     "Width Fraction above. >1 makes buttons taller, <1 shorter. Still preserves the sprite's " +
+                     "own proportions otherwise, just scaled -- this doesn't distort the art, it resizes it.")]
+            public float buttonHeightScale = 1f;
+            [Tooltip("Height used ONLY for a button whose sprite field above is left empty (flat-color " +
+                     "placeholder mode). Buttons with real art size themselves from that art instead.")]
+            public float placeholderButtonHeight = 90f;
+        }
+
+        [Serializable]
+        public class BackgroundSettings
+        {
+            [Tooltip("Solid backdrop color behind the whole menu (RGB only -- see Menu Background Opacity " +
+                     "below for transparency). Defaults to white; adjust to taste.")]
+            public Color menuBackgroundColor = Color.white;
+            [Range(0f, 1f)]
+            [Tooltip("Transparency of the menu background. 1 = fully opaque, 0 = fully see-through (the 3D " +
+                     "board will show through behind the menu). Defaults to mostly-opaque.")]
+            public float menuBackgroundOpacity = 0.92f;
+            [Tooltip("Text color for panel titles and Settings' labels (\"Three Musketeers\", \"Paused\", " +
+                     "\"Music Volume\", etc). Defaults to near-black so it reads against the default white " +
+                     "background above -- doesn't affect button labels, which sit on your button art instead " +
+                     "and stay white so they read against whatever color that art is.")]
+            public Color menuTextColor = new Color(0.1f, 0.1f, 0.12f);
+        }
+
+        [Serializable]
+        public class TextSettings
+        {
+            [Tooltip("Drag in a custom font asset (an imported TTF/OTF) to use everywhere in the menu. Leave " +
+                     "empty to use Unity's built-in default font.")]
+            public Font menuFont;
+            [Tooltip("Normal, Bold, Italic, or both -- applies to every label and button in the menu at once.")]
+            public FontStyle menuFontStyle = FontStyle.Normal;
+            public int titleFontSize = 64;
+            public int buttonFontSize = 32;
+            [Tooltip("Settings' \"Music Volume\" / \"Sound Effects Volume\" labels.")]
+            public int bodyFontSize = 28;
+            [Tooltip("Settings' \"Account & Notifications -- coming soon\" note.")]
+            public int noteFontSize = 22;
+            [Tooltip("Color of the text label on every button (Select Theme, Play, Settings, Quit, " +
+                     "Resume, Go to Main Menu, Back, and every generated theme-list entry). Defaults to " +
+                     "white so it reads against colored/dark button art -- adjust if your button sprites " +
+                     "are light-colored instead.")]
+            public Color buttonTextColor = Color.white;
+        }
+
         [Header("Scene references")]
         [SerializeField] private Board3DView boardView;
         [SerializeField] private GameManager gameManager;
@@ -51,56 +150,18 @@ namespace ThreeMusketeers.UI
                  "what size or aspect ratio the art turns out to be. Leave empty for plain text only.")]
         [SerializeField] private Sprite titleBackgroundSprite;
 
+        // Each of these renders as its own collapsible foldout in the Inspector
+        // (a plain [System.Serializable] field does that automatically).
         [Header("Button art -- one sprite per button, each fully independent")]
         [Tooltip("Every button below is its own field on purpose: different packs organize art " +
                  "differently (by color, by state, by shape...), so rather than guess at a shared " +
                  "scheme, you just drag whichever sprite you want onto whichever button. Leave any of " +
                  "these empty to keep that one button as a flat colored placeholder rectangle instead.")]
-        [SerializeField] private Sprite selectThemeButtonSprite;
-        [SerializeField] private Sprite startGameButtonSprite; // "Play" in the UI
-        [SerializeField] private Sprite settingsButtonSprite;
-        [SerializeField] private Sprite quitButtonSprite;
-        [SerializeField] private Sprite resumeButtonSprite;
-        [SerializeField] private Sprite goToMainMenuButtonSprite;
-        [Tooltip("Shared by every \"Back\" button (Select Theme panel, Settings panel) -- they're the " +
-                 "same action everywhere, so one field covers both rather than duplicating it.")]
-        [SerializeField] private Sprite backButtonSprite;
-        [Tooltip("Shared by every entry in the Select Theme list, whatever themes you've assigned above " +
-                 "-- there's one button per ThemeDefinition, generated at runtime, so they can't each get " +
-                 "their own named field the way the fixed menu buttons above do.")]
-        [SerializeField] private Sprite themeListButtonSprite;
-
-        [Header("Button layout (auto-sizes to whichever sprite is assigned above)")]
-        [Range(0.1f, 1f)]
-        [Tooltip("How wide each button stack is, as a fraction of the panel's width, centered.")]
-        [SerializeField] private float buttonWidthFraction = 0.5f;
-        [Range(0f, 0.05f)]
-        [Tooltip("Vertical gap between buttons in a stack, as a fraction of the panel's height -- not a " +
-                 "raw pixel/unit count, so it looks the same regardless of your Canvas's resolution or " +
-                 "Scaler settings. Applies everywhere -- Home, Pause, the Select Theme list, Settings.")]
-        [SerializeField] private float buttonSpacingFraction = 0.015f;
-        [Range(0.5f, 2f)]
-        [Tooltip("Multiplies every button's height WITHOUT touching its width -- independent of Button " +
-                 "Width Fraction above. >1 makes buttons taller, <1 shorter. Still preserves the sprite's " +
-                 "own proportions otherwise, just scaled -- this doesn't distort the art, it resizes it.")]
-        [SerializeField] private float buttonHeightScale = 1f;
-        [Tooltip("Height used ONLY for a button whose sprite field above is left empty (flat-color " +
-                 "placeholder mode). Buttons with real art size themselves from that art instead.")]
-        [SerializeField] private float placeholderButtonHeight = 90f;
-
-        [Header("Menu panel background (shared by every panel -- Home, Pause, Theme Select, Settings)")]
-        [Tooltip("Solid backdrop color behind the whole menu (RGB only -- see Menu Background Opacity " +
-                 "below for transparency). Defaults to white; adjust to taste.")]
-        [SerializeField] private Color menuBackgroundColor = Color.white;
-        [Range(0f, 1f)]
-        [Tooltip("Transparency of the menu background. 1 = fully opaque, 0 = fully see-through (the 3D " +
-                 "board will show through behind the menu). Defaults to mostly-opaque.")]
-        [SerializeField] private float menuBackgroundOpacity = 0.92f;
-        [Tooltip("Text color for panel titles and Settings' labels (\"Three Musketeers\", \"Paused\", " +
-                 "\"Music Volume\", etc). Defaults to near-black so it reads against the default white " +
-                 "background above -- doesn't affect button labels, which sit on your button art instead " +
-                 "and stay white so they read against whatever color that art is.")]
-        [SerializeField] private Color menuTextColor = new Color(0.1f, 0.1f, 0.12f);
+        [SerializeField] private ButtonArtSettings buttonArt = new ButtonArtSettings();
+        [SerializeField] private ButtonHeightOverrides buttonHeights = new ButtonHeightOverrides();
+        [SerializeField] private ButtonLayoutSettings buttonLayout = new ButtonLayoutSettings();
+        [SerializeField] private BackgroundSettings background = new BackgroundSettings();
+        [SerializeField] private TextSettings text = new TextSettings();
 
         private const string SelectedThemeIdKey = "SelectedThemeId";
 
@@ -126,6 +187,17 @@ namespace ThreeMusketeers.UI
             string savedId = PlayerPrefs.GetString(SelectedThemeIdKey, "");
             _pendingTheme = FindThemeById(savedId);
 
+            // Board3DView.SetTheme + ApplyThemeCameraBackground, NOT
+            // BuildBoard -- this colors/images the camera's backdrop behind
+            // the menu with whichever theme was last selected, without
+            // actually building a board or starting a game before Play is
+            // pressed (see GameManager.Start, which no longer auto-starts).
+            if (boardView != null)
+            {
+                boardView.SetTheme(_pendingTheme);
+                boardView.ApplyThemeCameraBackground();
+            }
+
             if (AudioManager.Instance != null) AudioManager.Instance.PlayMenuMusic(menuPlaylist);
         }
 
@@ -137,14 +209,14 @@ namespace ThreeMusketeers.UI
             CreateTitle(_homePanel.transform, gameTitleText, titleBackgroundSprite);
 
             var stack = CreateButtonStack(_homePanel.transform, 0.62f);
-            CreateButton(stack.transform, "Select Theme", selectThemeButtonSprite, new Color(0.25f, 0.45f, 0.65f),
-                () => ShowOnly(_themePanel));
-            CreateButton(stack.transform, "Play", startGameButtonSprite, new Color(0.25f, 0.6f, 0.35f),
-                OnStartGame);
-            CreateButton(stack.transform, "Settings", settingsButtonSprite, new Color(0.45f, 0.45f, 0.45f),
-                () => ShowOnly(_settingsPanel));
-            CreateButton(stack.transform, "Quit", quitButtonSprite, new Color(0.6f, 0.3f, 0.3f),
-                OnQuit);
+            CreateButton(stack.transform, "Select Theme", buttonArt.selectThemeButtonSprite, new Color(0.25f, 0.45f, 0.65f),
+                () => ShowOnly(_themePanel), buttonHeights.selectThemeButtonHeightScale);
+            CreateButton(stack.transform, "Play", buttonArt.startGameButtonSprite, new Color(0.25f, 0.6f, 0.35f),
+                OnStartGame, buttonHeights.startGameButtonHeightScale);
+            CreateButton(stack.transform, "Settings", buttonArt.settingsButtonSprite, new Color(0.45f, 0.45f, 0.45f),
+                () => ShowOnly(_settingsPanel), buttonHeights.settingsButtonHeightScale);
+            CreateButton(stack.transform, "Quit", buttonArt.quitButtonSprite, new Color(0.6f, 0.3f, 0.3f),
+                OnQuit, buttonHeights.quitButtonHeightScale);
         }
 
         private void OnStartGame()
@@ -185,14 +257,14 @@ namespace ThreeMusketeers.UI
             CreateTitle(_pauseMenuPanel.transform, "Paused", null);
 
             var stack = CreateButtonStack(_pauseMenuPanel.transform, 0.62f);
-            CreateButton(stack.transform, "Resume", resumeButtonSprite, new Color(0.25f, 0.45f, 0.65f),
-                OnResume);
-            CreateButton(stack.transform, "Go to Main Menu", goToMainMenuButtonSprite, new Color(0.25f, 0.6f, 0.35f),
-                OnGoToMainMenu);
-            CreateButton(stack.transform, "Settings", settingsButtonSprite, new Color(0.45f, 0.45f, 0.45f),
-                () => ShowOnly(_settingsPanel));
-            CreateButton(stack.transform, "Quit", quitButtonSprite, new Color(0.6f, 0.3f, 0.3f),
-                OnQuit);
+            CreateButton(stack.transform, "Resume", buttonArt.resumeButtonSprite, new Color(0.25f, 0.45f, 0.65f),
+                OnResume, buttonHeights.resumeButtonHeightScale);
+            CreateButton(stack.transform, "Go to Main Menu", buttonArt.goToMainMenuButtonSprite, new Color(0.25f, 0.6f, 0.35f),
+                OnGoToMainMenu, buttonHeights.goToMainMenuButtonHeightScale);
+            CreateButton(stack.transform, "Settings", buttonArt.settingsButtonSprite, new Color(0.45f, 0.45f, 0.45f),
+                () => ShowOnly(_settingsPanel), buttonHeights.settingsButtonHeightScale);
+            CreateButton(stack.transform, "Quit", buttonArt.quitButtonSprite, new Color(0.6f, 0.3f, 0.3f),
+                OnQuit, buttonHeights.quitButtonHeightScale);
         }
 
         private void OnResume()
@@ -239,12 +311,12 @@ namespace ThreeMusketeers.UI
                     if (theme == null) continue;
                     string label = string.IsNullOrEmpty(theme.displayName) ? theme.themeId : theme.displayName;
                     var capturedTheme = theme; // local copy for the closure below
-                    CreateButton(stack.transform, label, themeListButtonSprite, new Color(0.25f, 0.45f, 0.65f),
-                        () => SelectTheme(capturedTheme));
+                    CreateButton(stack.transform, label, buttonArt.themeListButtonSprite, new Color(0.25f, 0.45f, 0.65f),
+                        () => SelectTheme(capturedTheme), buttonHeights.themeListButtonHeightScale);
                 }
             }
 
-            CreateFixedButton(_themePanel.transform, "Back", backButtonSprite, new Color(0.45f, 0.45f, 0.45f),
+            CreateFixedButton(_themePanel.transform, "Back", buttonArt.backButtonSprite, new Color(0.45f, 0.45f, 0.45f),
                 Rect01(0.3f, 0.06f, 0.7f, 0.15f), () => ShowOnly(_homePanel));
         }
 
@@ -272,12 +344,12 @@ namespace ThreeMusketeers.UI
 
             var stack = CreateButtonStack(_settingsPanel.transform, 0.72f);
 
-            CreateStackedLabel(stack.transform, "Music Volume", 28, menuTextColor, 40f);
+            CreateStackedLabel(stack.transform, "Music Volume", text.bodyFontSize, background.menuTextColor, 40f);
             CreateStackedSlider(stack.transform, 50f,
                 AudioManager.Instance != null ? AudioManager.Instance.MusicVolume : 0.6f,
                 v => { if (AudioManager.Instance != null) AudioManager.Instance.SetMusicVolume(v); });
 
-            CreateStackedLabel(stack.transform, "Sound Effects Volume", 28, menuTextColor, 40f);
+            CreateStackedLabel(stack.transform, "Sound Effects Volume", text.bodyFontSize, background.menuTextColor, 40f);
             CreateStackedSlider(stack.transform, 50f,
                 AudioManager.Instance != null ? AudioManager.Instance.SfxVolume : 0.8f,
                 v => { if (AudioManager.Instance != null) AudioManager.Instance.SetSfxVolume(v); });
@@ -288,9 +360,9 @@ namespace ThreeMusketeers.UI
             // a disabled placeholder so there's room reserved for it once
             // there's something real to wire it to -- see the chat message
             // this shipped with for the reasoning.
-            CreateStackedLabel(stack.transform, "Account & Notifications -- coming soon", 22, new Color(0.5f, 0.5f, 0.5f), 36f);
+            CreateStackedLabel(stack.transform, "Account & Notifications -- coming soon", text.noteFontSize, new Color(0.5f, 0.5f, 0.5f), 36f);
 
-            CreateFixedButton(_settingsPanel.transform, "Back", backButtonSprite, new Color(0.45f, 0.45f, 0.45f),
+            CreateFixedButton(_settingsPanel.transform, "Back", buttonArt.backButtonSprite, new Color(0.45f, 0.45f, 0.45f),
                 Rect01(0.3f, 0.06f, 0.7f, 0.15f), () => ShowOnly(_rootPanel));
         }
 
@@ -306,8 +378,8 @@ namespace ThreeMusketeers.UI
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
             var image = go.AddComponent<Image>();
-            var backgroundColor = menuBackgroundColor;
-            backgroundColor.a = menuBackgroundOpacity; // separate slider, not the color picker's own alpha -- see its tooltip
+            var backgroundColor = background.menuBackgroundColor;
+            backgroundColor.a = background.menuBackgroundOpacity; // separate slider, not the color picker's own alpha -- see its tooltip
             image.color = backgroundColor; // shared across every panel
             return go;
         }
@@ -321,7 +393,7 @@ namespace ThreeMusketeers.UI
         /// reflow with the buttons). Optional background art always uses
         /// preserveAspect, so it's safe with any sprite's native size.
         /// </summary>
-        private void CreateTitle(Transform parent, string text, Sprite backgroundSprite)
+        private void CreateTitle(Transform parent, string titleText, Sprite backgroundSprite)
         {
             if (backgroundSprite != null)
             {
@@ -337,10 +409,10 @@ namespace ThreeMusketeers.UI
                 bgImage.preserveAspect = true; // never stretched/squashed, whatever the art's aspect ratio is
             }
 
-            CreateLabel(parent, "Title", text, new Vector2(0f, 0.78f), new Vector2(1f, 0.92f), 64, menuTextColor);
+            CreateLabel(parent, "Title", titleText, new Vector2(0f, 0.78f), new Vector2(1f, 0.92f), text.titleFontSize, background.menuTextColor);
         }
 
-        private void CreateLabel(Transform parent, string name, string text, Vector2 anchorMin, Vector2 anchorMax, int fontSize, Color? color)
+        private void CreateLabel(Transform parent, string name, string labelText, Vector2 anchorMin, Vector2 anchorMax, int fontSize, Color? color)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
@@ -351,11 +423,12 @@ namespace ThreeMusketeers.UI
             rect.offsetMax = Vector2.zero;
 
             var label = go.AddComponent<Text>();
-            label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            label.font = text.menuFont != null ? text.menuFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            label.fontStyle = text.menuFontStyle;
             label.alignment = TextAnchor.MiddleCenter;
             label.fontSize = fontSize;
             label.color = color ?? Color.white;
-            label.text = text;
+            label.text = labelText;
         }
 
         /// <summary>
@@ -372,7 +445,7 @@ namespace ThreeMusketeers.UI
             var go = new GameObject("ButtonStack", typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var rect = go.GetComponent<RectTransform>();
-            float halfWidth = buttonWidthFraction / 2f;
+            float halfWidth = buttonLayout.buttonWidthFraction / 2f;
             rect.anchorMin = new Vector2(0.5f - halfWidth, topY);
             rect.anchorMax = new Vector2(0.5f + halfWidth, topY);
             rect.pivot = new Vector2(0.5f, 1f);
@@ -390,7 +463,7 @@ namespace ThreeMusketeers.UI
             // panels are full-screen anchored, so their rect height here is
             // already resolved from the Canvas, no layout pass required.
             float panelHeight = ((RectTransform)parent).rect.height;
-            layoutGroup.spacing = buttonSpacingFraction * panelHeight;
+            layoutGroup.spacing = buttonLayout.buttonSpacingFraction * panelHeight;
 
             var fitter = go.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
@@ -409,7 +482,7 @@ namespace ThreeMusketeers.UI
         /// transition, so it works with any single image, no matching
         /// hover/pressed art required.
         /// </summary>
-        private void CreateButton(Transform stackParent, string label, Sprite sprite, Color fallbackColor, Action onClick)
+        private void CreateButton(Transform stackParent, string label, Sprite sprite, Color fallbackColor, Action onClick, float heightScaleOverride = 1f)
         {
             var go = new GameObject(label + "Button", typeof(RectTransform));
             go.transform.SetParent(stackParent, false);
@@ -417,6 +490,8 @@ namespace ThreeMusketeers.UI
             var image = go.AddComponent<Image>();
             var button = go.AddComponent<Button>();
             button.targetGraphic = image;
+
+            float totalHeightScale = buttonLayout.buttonHeightScale * heightScaleOverride;
 
             if (sprite != null)
             {
@@ -426,23 +501,23 @@ namespace ThreeMusketeers.UI
 
                 var aspectFitter = go.AddComponent<AspectRatioFitter>();
                 aspectFitter.aspectMode = AspectRatioFitter.AspectMode.WidthControlsHeight;
-                // Dividing by buttonHeightScale here (rather than multiplying the
+                // Dividing by the height scale here (rather than multiplying the
                 // resulting height) is what keeps width untouched -- WidthControlsHeight
                 // computes height = width / aspectRatio, so a SMALLER aspect ratio for
                 // the same width yields a TALLER button, with no effect on width at all.
                 float nativeAspect = (float)sprite.rect.width / sprite.rect.height;
-                aspectFitter.aspectRatio = nativeAspect / buttonHeightScale;
+                aspectFitter.aspectRatio = nativeAspect / totalHeightScale;
             }
             else
             {
                 image.color = fallbackColor;
                 var layoutElement = go.AddComponent<LayoutElement>();
-                layoutElement.preferredHeight = placeholderButtonHeight * buttonHeightScale;
+                layoutElement.preferredHeight = buttonLayout.placeholderButtonHeight * totalHeightScale;
             }
 
             button.onClick.AddListener(() => onClick?.Invoke());
 
-            CreateLabel(go.transform, "Label", label, Vector2.zero, Vector2.one, 32, null);
+            CreateLabel(go.transform, "Label", label, Vector2.zero, Vector2.one, text.buttonFontSize, text.buttonTextColor);
         }
 
         /// <summary>
@@ -478,11 +553,11 @@ namespace ThreeMusketeers.UI
 
             button.onClick.AddListener(() => onClick?.Invoke());
 
-            CreateLabel(go.transform, "Label", label, Vector2.zero, Vector2.one, 32, null);
+            CreateLabel(go.transform, "Label", label, Vector2.zero, Vector2.one, text.buttonFontSize, text.buttonTextColor);
         }
 
         /// <summary>A plain label as a stack child (Settings panel) -- sized via LayoutElement, not an explicit anchor rect.</summary>
-        private void CreateStackedLabel(Transform stackParent, string text, int fontSize, Color color, float preferredHeight)
+        private void CreateStackedLabel(Transform stackParent, string labelText, int fontSize, Color color, float preferredHeight)
         {
             var go = new GameObject("Label", typeof(RectTransform));
             go.transform.SetParent(stackParent, false);
@@ -490,11 +565,12 @@ namespace ThreeMusketeers.UI
             layoutElement.preferredHeight = preferredHeight;
 
             var label = go.AddComponent<Text>();
-            label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            label.font = text.menuFont != null ? text.menuFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            label.fontStyle = text.menuFontStyle;
             label.alignment = TextAnchor.MiddleCenter;
             label.fontSize = fontSize;
             label.color = color;
-            label.text = text;
+            label.text = labelText;
         }
 
         /// <summary>A volume slider as a stack child (Settings panel) -- sized via LayoutElement, not an explicit anchor rect.</summary>

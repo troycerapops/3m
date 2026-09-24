@@ -47,6 +47,13 @@ namespace ThreeMusketeers.Gameplay
         [Header("Layout -- must match the Blender art spec")]
         [SerializeField] private float cellSize = 1f;
 
+        [Header("Camera background")]
+        [Tooltip("How far in front of the Board Camera the active theme's Background Image (if any) is " +
+                 "placed, in world units -- must stay within the camera's Far clip plane, and further out " +
+                 "than the board/pieces/environment so nothing gets hidden behind it. The default is safely " +
+                 "behind a normal-sized board; only worth touching if you notice clipping either way.")]
+        [SerializeField] private float backgroundDistance = 40f;
+
         [Header("Lighting")]
         [Tooltip("The scene's default light(s) (e.g. the Directional Light) -- switched off automatically " +
                  "when the active theme supplies its own (ThemeDefinition.suppliesOwnLighting), and back on " +
@@ -60,6 +67,7 @@ namespace ThreeMusketeers.Gameplay
         private readonly Dictionary<Coord, PieceView3D> _pieces = new Dictionary<Coord, PieceView3D>();
         private readonly List<Transform> _exitPoints = new List<Transform>();
         private bool _inputEnabled = true;
+        private SpriteRenderer _backgroundRenderer; // theme's optional full backdrop image, parented to the camera -- see ApplyThemeCameraBackground
 
         /// <summary>
         /// Every child of the environment prefab whose name starts with
@@ -121,6 +129,10 @@ namespace ThreeMusketeers.Gameplay
         /// <summary>Full (re)build: tears down any previous board and spawns tiles + pieces matching the given state. Used on start and on restart.</summary>
        public void BuildBoard(BoardState board)
         {
+            // Resolved here too (not just Awake) so the Edit Mode "Build
+            // Preview Board" button also picks a camera and colors its
+            // background correctly without needing Play mode.
+            if (boardCamera == null) boardCamera = Camera.main;
 
             var existingBoardRoot = transform.Find("BoardRoot");
             if (existingBoardRoot != null)
@@ -172,6 +184,74 @@ namespace ThreeMusketeers.Gameplay
             if (defaultSceneLights != null)
                 foreach (var light in defaultSceneLights)
                     if (light != null) light.enabled = !suppliesOwnLighting;
+
+            ApplyThemeCameraBackground();
+        }
+
+        /// <summary>
+        /// Applies the active theme's camera background -- see
+        /// ThemeDefinition.backgroundColor / backgroundImage. Always sets the
+        /// Board Camera's clear color as a safety-net backdrop, then, if the
+        /// theme supplies a Background Image, layers a sprite in front of it
+        /// sized to exactly fill the camera's view. That sprite lives on a
+        /// GameObject parented to the camera itself (created once, reused
+        /// after that) so it automatically stays correctly placed/sized even
+        /// if the camera ever moves -- nothing here assumes it stays fixed.
+        ///
+        /// Called automatically by BuildBoard(), but public and safe to call
+        /// on its own too -- MainMenuController does exactly that at launch
+        /// (after resolving whichever theme was last selected) so the Home
+        /// Screen's backdrop is already correct behind the menu, without
+        /// actually building a board/starting a game before Play is pressed.
+        /// </summary>
+        public void ApplyThemeCameraBackground()
+        {
+            // Resolved here too, not just Awake -- this can now be called by
+            // MainMenuController before this component's own Awake has
+            // necessarily run yet (Script Execution Order between different
+            // GameObjects isn't guaranteed), so it can't rely on Awake
+            // having already set boardCamera/theme.
+            if (boardCamera == null) boardCamera = Camera.main;
+            if (theme == null) theme = ResolveDefaultTheme();
+            if (boardCamera == null || theme == null) return;
+
+            boardCamera.clearFlags = CameraClearFlags.SolidColor;
+            boardCamera.backgroundColor = theme.backgroundColor;
+
+            if (theme.backgroundImage == null)
+            {
+                if (_backgroundRenderer != null) _backgroundRenderer.gameObject.SetActive(false);
+                return;
+            }
+
+            if (_backgroundRenderer == null)
+            {
+                var go = new GameObject("ThemeBackground");
+                go.transform.SetParent(boardCamera.transform, false);
+                _backgroundRenderer = go.AddComponent<SpriteRenderer>();
+            }
+
+            _backgroundRenderer.gameObject.SetActive(true);
+            _backgroundRenderer.sprite = theme.backgroundImage;
+
+            float height = boardCamera.orthographic
+                ? boardCamera.orthographicSize * 2f
+                : 2f * backgroundDistance * Mathf.Tan(boardCamera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            float width = height * boardCamera.aspect;
+
+            var t = _backgroundRenderer.transform;
+            t.localPosition = new Vector3(0f, 0f, backgroundDistance);
+            t.localRotation = Quaternion.identity;
+
+            // Stretched to exactly fill width/height computed above, rather than
+            // preserving the sprite's own aspect -- author backdrop art at the
+            // target screen aspect ratio (see ThemeDefinition.backgroundImage's
+            // tooltip) so this stretch is a no-op in practice.
+            Vector2 nativeSize = _backgroundRenderer.sprite.bounds.size;
+            t.localScale = new Vector3(
+                nativeSize.x > 0f ? width / nativeSize.x : 1f,
+                nativeSize.y > 0f ? height / nativeSize.y : 1f,
+                1f);
         }
 
         private void SpawnPiece(PieceType type, Coord coord)
