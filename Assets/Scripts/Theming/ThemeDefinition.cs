@@ -1,5 +1,6 @@
 using ThreeMusketeers.Core;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace ThreeMusketeers.Theming
 {
@@ -57,20 +58,24 @@ namespace ThreeMusketeers.Theming
         [Header("Audio (optional -- silent if left empty)")]
         [Tooltip("Background music -- shuffled and played back-to-back for the whole game.")]
         public AudioClip[] soundtrackPlaylist;
-        [Tooltip("Optional single track swapped in for tense moments (see GameManager's intensity check). " +
-                 "Leave empty to just keep playing the normal playlist through tense moments too.")]
-        public AudioClip intenseTrack;
+        [Tooltip("Played on any piece move, capture or not -- layers under Capture Sound on a capturing move.")]
+        public AudioClip movementSound;
         public AudioClip captureSound;
+        [Tooltip("Played when a piece is successfully tapped/selected.")]
+        public AudioClip selectPieceSound;
         [Tooltip("Played when Offense wins.")]
         public AudioClip offenseWinSound;
         [Tooltip("Played when Defense wins.")]
         public AudioClip defenseWinSound;
 
-        [Header("Fallback colors (used only when the matching prefab/material above is empty)")]
-        public Color offenseFallbackColor = new Color(0.85f, 0.75f, 0.35f); // prison jumpsuit-ish tan/orange by default
-        public Color defenseFallbackColor = new Color(0.25f, 0.3f, 0.4f);   // steel blue-grey
+        [Header("Player colors (fallback for missing prefab/material, and turn/win text color)")]
+        [FormerlySerializedAs("offenseFallbackColor")]
+        public Color offenseColor = new Color(0.85f, 0.75f, 0.35f);
+        [FormerlySerializedAs("defenseFallbackColor")]
+        public Color defenseColor = new Color(0.25f, 0.3f, 0.4f);
         public Color lightTileFallbackColor = new Color(0.78f, 0.76f, 0.70f);
         public Color darkTileFallbackColor = new Color(0.45f, 0.43f, 0.40f);
+
         [Header("Board highlight colors")]
         public Color selectedHighlightColor = new Color(1f, 0.85f, 0.2f, 0.7f);
         public Color legalDestinationHighlightColor = new Color(0.4f, 0.85f, 0.4f, 0.7f);
@@ -81,23 +86,60 @@ namespace ThreeMusketeers.Theming
         public float ownedGlowBlend = 0.45f;
 
         [Header("Display text")]
-        public string offenseLabel = "Convicts";
-        public string defenseLabel = "Guards";
-        [TextArea] public string offenseTurnText = "Convicts' turn -- tap a convict, then a highlighted guard to slip past them.";
-        [TextArea] public string defenseTurnText = "Guards' turn -- tap a guard, then an empty cell to move them.";
-        [TextArea] public string offenseWinText = "The convicts made it out!";
-        [TextArea] public string defenseWinText = "Recaptured -- the guards win.";
+        public string offenseLabel = "Offense";
+        public string defenseLabel = "Defense";
+        [Tooltip("Just the instructional part of the turn description -- don't repeat the label, it's generated automatically as a colored, bold \"<Label>' Turn:\" prefix from Offense/Defense Label above, using Offense/Defense Color. You can use {Label} (this side's label) and {OpponentLabel} (the other side's label) as placeholders here, e.g. \"tap a {Label}, then a highlighted {OpponentLabel} to slip past them.\"")]
+        [TextArea] public string offenseTurnText;
+        [TextArea] public string defenseTurnText;
+        [Tooltip("The full win announcement, shown as-is -- no label is added automatically. Use {Label} (winning side's label) and {OpponentLabel} (the losing side's label) if you want to reference a name, e.g. \"{Label} win!\" or \"Win! The {OpponentLabel} never saw it coming.\"")]
+        [TextArea] public string offenseWinText;
+        [TextArea] public string defenseWinText;
 
-        public string GetTurnText(Player player) =>
-            player == Player.Offense ? offenseTurnText : defenseTurnText;
+        private const string DefaultOffenseTurnText = "tap a piece, then a highlighted square to capture.";
+        private const string DefaultDefenseTurnText = "tap a piece, then an empty square to move.";
+        private const string DefaultWinText = "Win!";
 
-        public string GetWinText(GameResult result) =>
-            result == GameResult.OffenseWin ? offenseWinText : defenseWinText;
+        public string GetTurnText(Player player)
+        {
+            string label = player == Player.Offense ? offenseLabel : defenseLabel;
+            string opponentLabel = player == Player.Offense ? defenseLabel : offenseLabel;
+            Color color = player == Player.Offense ? offenseColor : defenseColor;
+            Color opponentColor = player == Player.Offense ? defenseColor : offenseColor;
+            string instructions = player == Player.Offense ? offenseTurnText : defenseTurnText;
+            if (string.IsNullOrWhiteSpace(instructions))
+                instructions = player == Player.Offense ? DefaultOffenseTurnText : DefaultDefenseTurnText;
+
+            string hex = ColorUtility.ToHtmlStringRGB(color);
+            string opponentHex = ColorUtility.ToHtmlStringRGB(opponentColor);
+            string coloredLabel = $"<b><color=#{hex}>{label}</color></b>";
+            string coloredOpponentLabel = $"<b><color=#{opponentHex}>{opponentLabel}</color></b>";
+            instructions = instructions.Replace("{Label}", coloredLabel).Replace("{OpponentLabel}", coloredOpponentLabel);
+
+            return $"<b><color=#{hex}>{label}'s Turn:</color></b> {instructions}";
+        }
+
+        public string GetWinText(GameResult result)
+        {
+            Player winner = result == GameResult.OffenseWin ? Player.Offense : Player.Defense;
+            string label = winner == Player.Offense ? offenseLabel : defenseLabel;
+            string opponentLabel = winner == Player.Offense ? defenseLabel : offenseLabel;
+            Color color = winner == Player.Offense ? offenseColor : defenseColor;
+            Color opponentColor = winner == Player.Offense ? defenseColor : offenseColor;
+            string suffix = winner == Player.Offense ? offenseWinText : defenseWinText;
+            if (string.IsNullOrWhiteSpace(suffix))
+                suffix = DefaultWinText;
+
+            string hex = ColorUtility.ToHtmlStringRGB(color);
+            string opponentHex = ColorUtility.ToHtmlStringRGB(opponentColor);
+            string coloredLabel = $"<b><color=#{hex}>{label}</color></b>";
+            string coloredOpponentLabel = $"<b><color=#{opponentHex}>{opponentLabel}</color></b>";
+            return suffix.Replace("{Label}", coloredLabel).Replace("{OpponentLabel}", coloredOpponentLabel);
+        }
 
         public GameObject GetPiecePrefab(PieceType type) =>
             type == PieceType.Offense ? offensePrefab : defensePrefab;
 
         public Color GetPieceFallbackColor(PieceType type) =>
-            type == PieceType.Offense ? offenseFallbackColor : defenseFallbackColor;
+            type == PieceType.Offense ? offenseColor : defenseColor;
     }
 }

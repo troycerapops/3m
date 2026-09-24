@@ -10,12 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 27141471782b0764ea97af9b1a93b392, type: 3}
-  m_Name: Default
+  m_Name: DefaultTheme
   m_EditorClassIdentifier: Assembly-CSharp::ThreeMusketeers.Theming.ThemeDefinition
   themeId: default
   displayName: Default
-  offensePrefab: {fileID: 508884199702333798, guid: eabbe2fb8955a054ab8f8704469684fb, type: 3}
-  defensePrefab: {fileID: 5905410743989923278, guid: 997cafe666ddba24b90cd919110645af, type: 3}
+  offensePrefab: {fileID: 5905410743989923278, guid: 997cafe666ddba24b90cd919110645af, type: 3}
+  defensePrefab: {fileID: 508884199702333798, guid: eabbe2fb8955a054ab8f8704469684fb, type: 3}
   tilePrefab: {fileID: 0}
   lightTileMaterial: {fileID: 0}
   darkTileMaterial: {fileID: 0}
@@ -28,24 +28,22 @@ MonoBehaviour:
   idleIntervalMax: 7
   captureLeadTime: 0.05
   soundtrackPlaylist:
-  - {fileID: 8300000, guid: d16cac38d5b98d2418805ec7fd9410a4, type: 3}
   - {fileID: 8300000, guid: 76e730f752d6d794eb27df975442b80b, type: 3}
   - {fileID: 8300000, guid: 9dcc69667dc296f469a607bdc5ed83f8, type: 3}
-  intenseTrack: {fileID: 0}
   captureSound: {fileID: 0}
   offenseWinSound: {fileID: 0}
   defenseWinSound: {fileID: 0}
-  offenseFallbackColor: {r: 0.85, g: 0.75, b: 0.35, a: 1}
-  defenseFallbackColor: {r: 0.25, g: 0.3, b: 0.4, a: 1}
+  offenseColor: {r: 0.7372549, g: 0.16470589, b: 0.20392159, a: 1}
+  defenseColor: {r: 0.21176472, g: 0.49411768, b: 0.6745098, a: 1}
   lightTileFallbackColor: {r: 0.9056604, g: 0.89284444, b: 0.89284444, a: 1}
   darkTileFallbackColor: {r: 0.16981131, g: 0.16981131, b: 0.16981131, a: 1}
   selectedHighlightColor: {r: 1, g: 0.7331585, b: 0.19999999, a: 0.25490198}
   legalDestinationHighlightColor: {r: 0.6497864, g: 0.9245283, b: 0.6497864, a: 0.3137255}
   ownedGlowHighlightColor: {r: 0.55, g: 0.85, b: 1, a: 0.36862746}
   ownedGlowBlend: 0.45
-  offenseLabel: Musketeers
-  defenseLabel: Cardinals
-  offenseTurnText: Musketeers' Turn -- tap a Musketeer, then a highlighted Cardinal to slip past them.
-  defenseTurnText: Cardinals' Turn -- tap a Cardinal, then an empty square to move them.
-  offenseWinText: The Musketeers win!
-  defenseWinText: The Cardinals win!
+  offenseLabel: Offense
+  defenseLabel: Defense
+  offenseTurnText: tap an {Label} piece, then a {OpponentLabel} to capture.
+  defenseTurnText: tap a {Label} piece, then an empty square to move there.
+  offenseWinText: The {Label} wins!
+  defenseWinText: The {Label} wins!

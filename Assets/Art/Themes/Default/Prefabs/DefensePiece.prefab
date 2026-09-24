@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1001 &6716364688571388063
+--- !u!1001 &850761046931813431
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -8,52 +8,80 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: -8679921383154817045, guid: cc727b30362447146b183041b7ebae39, type: 3}
+    - target: {fileID: -8679921383154817045, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: cc727b30362447146b183041b7ebae39, type: 3}
+    - target: {fileID: -8679921383154817045, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
       propertyPath: m_LocalPosition.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: cc727b30362447146b183041b7ebae39, type: 3}
+    - target: {fileID: -8679921383154817045, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
       propertyPath: m_LocalPosition.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: cc727b30362447146b183041b7ebae39, type: 3}
+    - target: {fileID: -8679921383154817045, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
       propertyPath: m_LocalRotation.w
       value: 1
       objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: cc727b30362447146b183041b7ebae39, type: 3}
+    - target: {fileID: -8679921383154817045, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
       propertyPath: m_LocalRotation.x
       value: 0.00000008146034
       objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: cc727b30362447146b183041b7ebae39, type: 3}
+    - target: {fileID: -8679921383154817045, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
       propertyPath: m_LocalRotation.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: cc727b30362447146b183041b7ebae39, type: 3}
+    - target: {fileID: -8679921383154817045, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
       propertyPath: m_LocalRotation.z
       value: -0
       objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: cc727b30362447146b183041b7ebae39, type: 3}
+    - target: {fileID: -8679921383154817045, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: cc727b30362447146b183041b7ebae39, type: 3}
+    - target: {fileID: -8679921383154817045, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: cc727b30362447146b183041b7ebae39, type: 3}
+    - target: {fileID: -8679921383154817045, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 919132149155446097, guid: cc727b30362447146b183041b7ebae39, type: 3}
+    - target: {fileID: 919132149155446097, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
       propertyPath: m_Name
       value: DefensePiece
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: cc727b30362447146b183041b7ebae39, type: 3}
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: -3592311923879144335}
+  m_SourcePrefab: {fileID: 100100000, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
+--- !u!1 &508884199702333798 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 46d4ace52f213644481e8ec7b5615d78, type: 3}
+  m_PrefabInstance: {fileID: 850761046931813431}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &-3592311923879144335
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 508884199702333798}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 607928722a7bbae458daf00ae2dde80e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeMusketeers.Gameplay.PieceView3D
+  moveDuration: 0.35
+  landingJiggleCycles: 1.5
+  landingJiggleDecay: 3
+  landingJiggleAmplitude: 0.5
+  captureFadeDuration: 0.2
+  selectPulseDuration: 0.12
+  idleBobHeight: 0.05
+  idleBobDuration: 0.6

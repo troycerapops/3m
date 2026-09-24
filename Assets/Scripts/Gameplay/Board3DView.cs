@@ -107,14 +107,17 @@ namespace ThreeMusketeers.Gameplay
         /// from scratch every time you click it -- including reflecting
         /// whatever's currently in the Theme field.
         /// </summary>
-            [ContextMenu("Build Preview Board (Edit Mode)")]
-            private void BuildPreviewBoardInEditor()
-            {
-                var previousTheme = theme;
-                theme = theme != null ? theme : ResolveDefaultTheme();
-                BuildBoard(new BoardState());
-                theme = previousTheme;
-            }
+        [ContextMenu("Build Preview Board (Edit Mode)")]
+        private void BuildPreviewBoardInEditor()
+        {
+            var previousTheme = theme;
+            theme = theme != null ? theme : ResolveDefaultTheme();
+            Debug.Log($"[PreviewDebug] resolved theme = {(theme != null ? theme.name : "NULL")}, " +
+                      $"defaultTheme field = {(defaultTheme != null ? defaultTheme.name : "NULL")}, " +
+                      $"offensePrefab null? {(theme != null ? (theme.GetPiecePrefab(PieceType.Offense) == null).ToString() : "N/A")}");
+            BuildBoard(new BoardState());
+            theme = previousTheme;
+        }
         /// <summary>Full (re)build: tears down any previous board and spawns tiles + pieces matching the given state. Used on start and on restart.</summary>
        public void BuildBoard(BoardState board)
         {
@@ -217,7 +220,6 @@ namespace ThreeMusketeers.Gameplay
             // a capture -- this is also what tells the mover which of the
             // Movement/Capture animation states to play (see PieceView3D).
             bool isCapture = _pieces.TryGetValue(move.To, out var captured);
-        Debug.Log($"[CaptureDebug] move {move.From} -> {move.To}, isCapture={isCapture}, pieceAtTo={(captured != null ? captured.Type.ToString() : "null")}");
 
             if (isCapture)
             {
@@ -257,6 +259,16 @@ namespace ThreeMusketeers.Gameplay
                 bool hasLegalMove = movableSet != null && movableSet.Contains(kvp.Key);
                 kvp.Value.SetHighlight(isSelected, isDest, hasLegalMove);
             }
+        }
+
+        /// <summary>
+        /// Plays the piece-select reaction on whatever's sitting at coord,
+        /// if anything -- called from GameManager.TrySelect right after a
+        /// selection succeeds.
+        /// </summary>
+        public void PlaySelectReaction(Coord coord)
+        {
+            if (_pieces.TryGetValue(coord, out var view)) view.PlaySelectReaction();
         }
 
         public void SetBoardInteractable(bool interactable) => _inputEnabled = interactable;

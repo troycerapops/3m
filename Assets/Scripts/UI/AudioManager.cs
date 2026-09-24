@@ -7,16 +7,30 @@ using UnityEngine;
 namespace ThreeMusketeers.UI
 {
     /// <summary>
-    /// Singleton, survives scene loads. Owns two music AudioSources (for a
-    /// simple crossfade between the normal playlist and an "intense" track)
-    /// plus one AudioSource for one-shot SFX. Entirely theme-driven -- it
-    /// never hardcodes a clip, always reading from whatever ThemeDefinition
-    /// is currently applied (see ApplyTheme). A theme with no clips assigned
-    /// just plays silently; nothing else needs to change.
+    /// Singleton, survives scene loads. Owns two music AudioSources (so
+    /// consecutive tracks within a playlist can crossfade into each other --
+    /// see PlaylistRoutine/CrossfadeToTrack) plus one AudioSource for
+    /// one-shot SFX. This class never decides WHEN to play music or WHICH
+    /// playlist -- it just plays whatever it's told, whenever it's told:
+    /// - PlayMenuMusic(clips): the caller (MainMenuController) passes the
+    ///   theme-independent menu playlist, since menu music is always the
+    ///   same regardless of which ThemeDefinition is selected.
+    /// - PlayGameplayMusic(): plays the active theme's soundtrackPlaylist
+    ///   (set via ApplyTheme). Nothing starts this automatically -- the
+    ///   caller (MainMenuController's Play button) must call it explicitly,
+    ///   so gameplay music never starts before the player actually presses
+    ///   Play.
+    /// Switching FROM one playlist TO another (e.g. menu -> gameplay) is a
+    /// hard cut, by design -- only track-to-track transitions WITHIN a
+    /// running playlist crossfade.
+    /// ApplyTheme itself only remembers the theme for SFX lookups
+    /// (PlayCaptureSound/PlayMovementSound/PlaySelectPieceSound/PlayWinSound)
+    /// -- it does not touch music.
+    /// A theme/playlist with no clips assigned just plays silently; nothing
+    /// else needs to change.
     ///
     /// Volume is the only thing this class persists itself (PlayerPrefs) --
-    /// everything else (current playlist, intensity) is per-session and
-    /// reset by ApplyTheme.
+    /// everything else (current playlist) is per-session.
     /// </summary>
     public class AudioManager : MonoBehaviour
     {
@@ -34,7 +48,6 @@ namespace ThreeMusketeers.UI
         private ThemeDefinition _theme;
         private readonly List<AudioClip> _shuffledPlaylist = new List<AudioClip>();
         private int _playlistIndex;
-        private bool _intense;
         private Coroutine _musicRoutine;
 
         public float MusicVolume { get; private set; } = 0.6f;
@@ -64,18 +77,47 @@ namespace ThreeMusketeers.UI
 
         /// <summary>
         /// Call whenever the active theme changes (Theme Select, or a fresh
-        /// game start) -- resets and starts that theme's playlist from
-        /// scratch, shuffled.
+        /// game start) -- just remembers it for PlayGameplayMusic/SFX
+        /// lookups. Does not touch music playback; call PlayGameplayMusic()
+        /// separately once a game is actually starting.
         /// </summary>
         public void ApplyTheme(ThemeDefinition theme)
         {
             _theme = theme;
-            _intense = false;
+        }
+
+        /// <summary>
+        /// Starts (or restarts) the theme-independent menu playlist, shuffled
+        /// -- the same regardless of which ThemeDefinition is selected.
+        /// Safe to call again while it's already playing (e.g. re-entering
+        /// the Home Screen); it just restarts the shuffle.
+        /// </summary>
+        public void PlayMenuMusic(AudioClip[] menuPlaylist)
+        {
+            StartPlaylist(menuPlaylist);
+        }
+
+        /// <summary>
+        /// Starts the active theme's soundtrack playlist, shuffled. Only
+        /// call this when a game is actually beginning (e.g. the Play
+        /// button) -- nothing starts gameplay music on its own.
+        /// </summary>
+        public void PlayGameplayMusic()
+        {
+            StartPlaylist(_theme != null ? _theme.soundtrackPlaylist : null);
+        }
+
+        private void StartPlaylist(AudioClip[] clips)
+        {
             if (_musicRoutine != null) StopCoroutine(_musicRoutine);
+            // Hard cut when switching playlists entirely (menu <-> gameplay)
+            // -- only track-to-track transitions within a playlist crossfade.
+            _musicSourceA.Stop();
+            _musicSourceB.Stop();
+            _activeMusicSource = _musicSourceA;
 
             _shuffledPlaylist.Clear();
-            if (theme != null && theme.soundtrackPlaylist != null)
-                _shuffledPlaylist.AddRange(theme.soundtrackPlaylist);
+            if (clips != null) _shuffledPlaylist.AddRange(clips);
             Shuffle(_shuffledPlaylist);
             _playlistIndex = 0;
 
@@ -83,27 +125,28 @@ namespace ThreeMusketeers.UI
                 _musicRoutine = StartCoroutine(PlaylistRoutine());
         }
 
-        /// <summary>
-        /// Crossfades to the theme's intense track, or back to the normal
-        /// playlist -- safe to call every turn, it only acts on a change.
-        /// GameManager decides what "intense" means; this class just plays
-        /// whatever it's told.
-        /// </summary>
-        public void SetIntense(bool intense)
-        {
-            if (intense == _intense) return;
-            _intense = intense;
-
-            if (intense && _theme != null && _theme.intenseTrack != null)
-                StartCoroutine(CrossfadeTo(_theme.intenseTrack, loop: true));
-            else if (_shuffledPlaylist.Count > 0)
-                StartCoroutine(CrossfadeTo(_shuffledPlaylist[_playlistIndex % _shuffledPlaylist.Count], loop: false));
-        }
-
         public void PlayCaptureSound()
         {
             if (_theme != null && _theme.captureSound != null)
                 _sfxSource.PlayOneShot(_theme.captureSound, SfxVolume);
+        }
+
+        /// <summary>
+        /// Plays on any piece move, capture or not -- layers under
+        /// PlayCaptureSound on a capturing move (footstep/slide plus the
+        /// capture stinger).
+        /// </summary>
+        public void PlayMovementSound()
+        {
+            if (_theme != null && _theme.movementSound != null)
+                _sfxSource.PlayOneShot(_theme.movementSound, SfxVolume);
+        }
+
+        /// <summary>Plays when a piece is successfully tapped/selected.</summary>
+        public void PlaySelectPieceSound()
+        {
+            if (_theme != null && _theme.selectPieceSound != null)
+                _sfxSource.PlayOneShot(_theme.selectPieceSound, SfxVolume);
         }
 
         public void PlayWinSound(GameResult result)
@@ -136,28 +179,34 @@ namespace ThreeMusketeers.UI
 
             while (true)
             {
-                yield return new WaitUntil(() => !_activeMusicSource.isPlaying);
-                if (_intense) yield break; // SetIntense's crossfade owns playback now
+                // Start crossfading into the next track CrossfadeDuration
+                // seconds before this one ends, so the two actually overlap
+                // instead of just fading in from silence after a gap.
+                float clipLength = _activeMusicSource.clip != null ? _activeMusicSource.clip.length : 0f;
+                float fadeStartTime = Mathf.Max(0f, clipLength - CrossfadeDuration);
+                yield return new WaitUntil(() => !_activeMusicSource.isPlaying || _activeMusicSource.time >= fadeStartTime);
+
+                if (_shuffledPlaylist.Count == 0) yield break;
 
                 _playlistIndex = (_playlistIndex + 1) % _shuffledPlaylist.Count;
                 if (_playlistIndex == 0) Shuffle(_shuffledPlaylist); // reshuffle after a full pass
-                _activeMusicSource.clip = _shuffledPlaylist[_playlistIndex];
-                _activeMusicSource.Play();
+
+                yield return CrossfadeToTrack(_shuffledPlaylist[_playlistIndex]);
             }
         }
 
-        private IEnumerator CrossfadeTo(AudioClip clip, bool loop)
+        private IEnumerator CrossfadeToTrack(AudioClip clip)
         {
             var incoming = _activeMusicSource == _musicSourceA ? _musicSourceB : _musicSourceA;
             var outgoing = _activeMusicSource;
 
             incoming.clip = clip;
-            incoming.loop = loop;
+            incoming.loop = false;
             incoming.volume = 0f;
             incoming.Play();
 
             float t = 0f;
-            while (t < CrossfadeDuration)
+            while (t < CrossfadeDuration && outgoing.isPlaying)
             {
                 t += Time.deltaTime;
                 float p = Mathf.Clamp01(t / CrossfadeDuration);
@@ -166,15 +215,8 @@ namespace ThreeMusketeers.UI
                 yield return null;
             }
             outgoing.Stop();
+            incoming.volume = MusicVolume;
             _activeMusicSource = incoming;
-
-            if (!loop)
-            {
-                // Crossfaded back to a normal playlist track -- hand control
-                // back to the playlist loop.
-                if (_musicRoutine != null) StopCoroutine(_musicRoutine);
-                _musicRoutine = StartCoroutine(PlaylistRoutine());
-            }
         }
 
         private static void Shuffle(List<AudioClip> list)

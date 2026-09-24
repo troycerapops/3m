@@ -74,11 +74,7 @@ namespace ThreeMusketeers.Gameplay
             boardView.SetBoardInteractable(true);
             RefreshSelectionVisual();
 
-            if (AudioManager.Instance != null)
-            {
-                AudioManager.Instance.ApplyTheme(boardView.Theme);
-                AudioManager.Instance.SetIntense(false);
-            }
+            if (AudioManager.Instance != null) AudioManager.Instance.ApplyTheme(boardView.Theme);
 
             if (ui != null)
             {
@@ -133,6 +129,8 @@ namespace ThreeMusketeers.Gameplay
 
             _selected = coord;
             _legalDestinations = moves.Select(m => m.To).ToList();
+            if (AudioManager.Instance != null) AudioManager.Instance.PlaySelectPieceSound();
+            boardView.PlaySelectReaction(coord);
         }
 
         private void ClearSelection()
@@ -148,7 +146,11 @@ namespace ThreeMusketeers.Gameplay
             _board.ApplyMove(move);
             boardView.ApplyMoveVisual(move);
 
-            if (isCapture && AudioManager.Instance != null) AudioManager.Instance.PlayCaptureSound();
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.PlayMovementSound();
+                if (isCapture) AudioManager.Instance.PlayCaptureSound();
+            }
 
             var result = _board.EvaluateResult();
 
@@ -183,14 +185,6 @@ namespace ThreeMusketeers.Gameplay
                 RefreshSelectionVisual();
 
                 if (ui != null) ui.SetTurnText(ResolveTurnText());
-                if (AudioManager.Instance != null)
-                {
-                    // Starter heuristic for "things are getting tense" -- few
-                    // captures left for the side to move, or guards thinning
-                    // out. Tune the thresholds once you've actually played it.
-                    bool intense = _board.GetLegalMoves(_board.CurrentPlayer).Count <= 2 || _board.DefenseCount() <= 8;
-                    AudioManager.Instance.SetIntense(intense);
-                }
             }
         }
 
