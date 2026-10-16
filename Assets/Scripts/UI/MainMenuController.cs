@@ -483,6 +483,11 @@ namespace ThreeMusketeers.UI
             if (gameManager != null)
             {
                 gameManager.SetSeats(offense, defense); // null = human; must come before StartNewGame
+                // Portraits: the chosen opponent's own picture for each computer seat. Human seats pass null,
+                // which means "use the default human portrait" (UI Style asset).
+                Sprite computerPortrait = _opponent != null ? _opponent.portrait : null;
+                gameManager.SetSeatPortraits(offense != null ? computerPortrait : null,
+                                             defense != null ? computerPortrait : null);
                 gameManager.StartNewGame();
             }
             if (AudioManager.Instance != null) AudioManager.Instance.PlayGameplayMusic();

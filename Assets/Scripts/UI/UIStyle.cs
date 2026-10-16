@@ -191,6 +191,31 @@ namespace ThreeMusketeers.UI
         public Sprite iconLock;
         public Sprite iconInfo;
         public Sprite iconClose;
+        [Tooltip("In-game Hint button. Empty = a plain button labelled Hint.")]
+        public Sprite iconHint;
+
+        [Header("Portraits and thinking bubble")]
+        [Tooltip("DEFAULT HUMAN PORTRAIT. Shown for any human player. To swap the default, drop a new sprite here.")]
+        public Sprite defaultHumanPortrait;
+        [Tooltip("DEFAULT COMPUTER PORTRAIT. Shown for any computer opponent whose own Portrait (on its Opponent asset) is empty. To swap the default, drop a new sprite here.")]
+        public Sprite defaultComputerPortrait;
+        [Tooltip("Optional art for the thinking bubble (9-slice it in the Sprite Editor). Empty = a rounded shape drawn by code.")]
+        public Sprite thinkingBubbleSprite;
+        [Tooltip("Color of the thinking bubble.")]
+        public Color thinkingBubbleColor = Color.white;
+        [Tooltip("Color of the three dots inside the thinking bubble.")]
+        public Color thinkingDotColor = new Color(0.25f, 0.28f, 0.35f);
+
+        /// <summary>
+        /// THE ONE PLACE default portraits are chosen. A seat's own portrait wins;
+        /// otherwise the default for human or computer. May return null if no
+        /// default is assigned (the HUD then shows a plain colored disc).
+        /// </summary>
+        public Sprite ResolvePortrait(Sprite specific, bool isHuman)
+        {
+            if (specific != null) return specific;
+            return isHuman ? defaultHumanPortrait : defaultComputerPortrait;
+        }
 
         /// <summary>Built-in defaults, used when no UIStyle asset is assigned.</summary>
         public static UIStyle CreateFallback()

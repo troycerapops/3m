@@ -50,6 +50,17 @@ namespace ThreeMusketeers.Gameplay
         [SerializeField] private SeatType offenseSeat = SeatType.Human;
         [SerializeField] private SeatType defenseSeat = SeatType.Human;
 
+        [Header("Thinking bubble")]
+        [Tooltip("How many seconds an AI move must take before the thought bubble appears above its portrait. " +
+                 "Quick moves never show it. One value for every opponent.")]
+        [SerializeField] private float thinkingBubbleDelaySeconds = 1.5f;
+
+        [Header("Hints (best-move suggestion)")]
+        [Tooltip("Show the Hint button when a human can move. Hints are UNLIMITED for now; see TryConsumeHint to plug in an inventory later.")]
+        [SerializeField] private bool hintsEnabled = true;
+        [Tooltip("How many plies ahead the hint looks. Higher = better hints but slower. 5 is quick and strong; the Expert AI uses 8.")]
+        [SerializeField] private int hintSearchDepth = 5;
+
         [Tooltip("Pause before an AI move so the previous move's animation can finish. " +
                  "Set this to at least as long as your capture animation.")]
         [SerializeField] private float aiMoveDelaySeconds = 1.0f;
@@ -64,6 +75,11 @@ namespace ThreeMusketeers.Gameplay
         private bool _matchActive;
         private bool _hintRevealed;
         private Coroutine _hintCoroutine;
+        private Sprite _offensePortrait, _defensePortrait; // null = use the default for human / computer
+        private bool _bubbleShown;
+        private Move? _hintMove;       // the suggestion currently shown on the board, if any
+        private bool _hintBusy;
+        private int _turnId;           // bumps every turn/new game so a late hint result can be discarded
 
         /// <summary>True while a match is being played (not yet won, not abandoned).</summary>
         public bool MatchInProgress => _matchActive && !_gameOver;
@@ -77,6 +93,7 @@ namespace ThreeMusketeers.Gameplay
             // starts once the menu's Start / Rematch button calls it
             // (see MainMenuController.StartMatch).
             boardView.CellClicked += HandleCellClicked;
+            if (ui != null) ui.HintRequested += RequestHint;
 
             // Seats from the Inspector. A menu that calls SetSeats() later replaces these.
             SetSeats(offenseSeat, defenseSeat);
@@ -85,6 +102,7 @@ namespace ThreeMusketeers.Gameplay
         private void OnDestroy()
         {
             if (boardView != null) boardView.CellClicked -= HandleCellClicked;
+            if (ui != null) ui.HintRequested -= RequestHint;
             Time.timeScale = 1f; // never leave the game frozen if this object goes away
         }
 
@@ -100,6 +118,8 @@ namespace ThreeMusketeers.Gameplay
             _aiCoroutine = null;
             if (_hintCoroutine != null) StopCoroutine(_hintCoroutine);
             _hintCoroutine = null;
+            ClearThinkingBubble();
+            ClearHint();
             ClearSelection();
             if (_board != null)
             {
@@ -117,6 +137,18 @@ namespace ThreeMusketeers.Gameplay
         {
             _offenseAgent = offenseAI == null ? null : new MinimaxAgent(Player.Offense, offenseAI);
             _defenseAgent = defenseAI == null ? null : new MinimaxAgent(Player.Defense, defenseAI);
+            _offensePortrait = null; // portraits are chosen separately; see SetSeatPortraits
+            _defensePortrait = null;
+        }
+
+        /// <summary>
+        /// Portraits for the two seats, shown in the top bar. Call AFTER SetSeats and BEFORE StartNewGame.
+        /// Pass null for a seat to use the default (human or computer) from the UI Style asset.
+        /// </summary>
+        public void SetSeatPortraits(Sprite offensePortrait, Sprite defensePortrait)
+        {
+            _offensePortrait = offensePortrait;
+            _defensePortrait = defensePortrait;
         }
 
         /// <summary>Convenience overload for UI dropdowns: SetSeats(SeatType.Human, SeatType.Hard).</summary>
@@ -135,6 +167,8 @@ namespace ThreeMusketeers.Gameplay
             _legalDestinations = null;
             _gameOver = false;
             _matchActive = true;
+            _turnId++;
+            ClearHint();
 
             if (_hintCoroutine != null) StopCoroutine(_hintCoroutine);
             // The opening turn shows its hint immediately -- no reason to
@@ -152,7 +186,10 @@ namespace ThreeMusketeers.Gameplay
                 ui.ApplyTheme(boardView.Theme);
                 ui.HideGameOver();
                 ui.SetTurnText(ResolveTurnText());
+                PushSeatDisplay();
             }
+            ClearThinkingBubble();
+            RefreshHintButton();
 
             MaybeStartAITurn();
         }
@@ -168,6 +205,9 @@ namespace ThreeMusketeers.Gameplay
 
             // Taps are ignored while it's an AI seat's turn.
             if (AgentFor(_board.CurrentPlayer) != null) return;
+
+            // Any tap on the board dismisses a shown hint; the tap then works normally.
+            if (_hintMove.HasValue) { _hintMove = null; RefreshSelectionVisual(); }
 
             var clickedPiece = _board.GetPiece(coord);
             var currentPieceType = _board.CurrentPlayer.ToPieceType();
@@ -225,6 +265,8 @@ namespace ThreeMusketeers.Gameplay
         {
             bool isCapture = _board.GetPiece(move.To) != PieceType.None;
 
+            _turnId++;
+            ClearHint();
             _board.ApplyMove(move);
             boardView.ApplyMoveVisual(move);
 
@@ -259,6 +301,8 @@ namespace ThreeMusketeers.Gameplay
                 boardView.SetBoardInteractable(false);
                 RefreshSelectionVisual();
                 string winText = ResolveWinText(result);
+                ClearThinkingBubble();
+                RefreshHintButton();
                 if (ui != null) ui.ShowGameOver(winText);
                 if (AudioManager.Instance != null) AudioManager.Instance.PlayWinSound(result);
                 if (GameEnded != null) GameEnded(result, winText);
@@ -269,7 +313,12 @@ namespace ThreeMusketeers.Gameplay
                 RestartHintTimer();
                 RefreshSelectionVisual();
 
-                if (ui != null) ui.SetTurnText(ResolveTurnText());
+                if (ui != null)
+                {
+                    ui.SetTurnText(ResolveTurnText());
+                    ui.SetActiveSide(_board.CurrentPlayer);
+                }
+                RefreshHintButton();
 
                 MaybeStartAITurn();
             }
@@ -289,15 +338,90 @@ namespace ThreeMusketeers.Gameplay
             _aiCoroutine = StartCoroutine(AITurn(agent));
         }
 
+        // The search for the AI's current move runs on a background thread so a long
+        // think (Expert) never freezes the screen. Only one search runs at a time.
+        private System.Threading.Tasks.Task<Move> _searchTask;
+
         private IEnumerator AITurn(IPlayerAgent agent)
         {
             yield return new WaitForSeconds(aiMoveDelaySeconds);
             if (_gameOver || !_matchActive || _board == null) yield break;
 
+            // An abandoned search from a previous game may still be finishing; an agent
+            // can only run one search at a time, so wait for it.
+            while (_searchTask != null && !_searchTask.IsCompleted) yield return null;
+            if (_gameOver || !_matchActive || _board == null) yield break;
+
             // The search runs on a copy; the live board is never touched by the AI.
-            Move move = agent.ChooseMove(_board.Clone());
+            BoardState snapshot = _board.Clone();
+            float startedAt = Time.realtimeSinceStartup;
+            var task = System.Threading.Tasks.Task.Run(() => agent.ChooseMove(snapshot));
+            _searchTask = task;
+            Player thinker = _board.CurrentPlayer;
+            while (!task.IsCompleted)
+            {
+                // Slow think: after the configured delay, show the thought bubble over this seat's portrait.
+                if (!_bubbleShown && Time.realtimeSinceStartup - startedAt >= thinkingBubbleDelaySeconds)
+                    SetThinkingBubble(thinker, true);
+                yield return null;
+            }
+            ClearThinkingBubble();
+
+            if (task.IsFaulted)
+            {
+                Debug.LogException(task.Exception);
+                _aiCoroutine = null;
+                yield break;
+            }
+
+            LogSearchTime(agent, Time.realtimeSinceStartup - startedAt);
             _aiCoroutine = null;
-            ApplyMove(move);
+            ApplyMove(task.Result);
+        }
+
+        // ---------- seat portraits and thinking bubble ----------
+
+        /// <summary>Tells the HUD which portrait goes where. The human sits on the left when there is exactly one.</summary>
+        private void PushSeatDisplay()
+        {
+            if (ui == null) return;
+            bool offHuman = _offenseAgent == null, defHuman = _defenseAgent == null;
+            Player left = offHuman != defHuman ? (offHuman ? Player.Offense : Player.Defense) : Player.Offense;
+            bool leftHuman = left == Player.Offense ? offHuman : defHuman;
+            bool rightHuman = left == Player.Offense ? defHuman : offHuman;
+            Sprite leftPortrait = left == Player.Offense ? _offensePortrait : _defensePortrait;
+            Sprite rightPortrait = left == Player.Offense ? _defensePortrait : _offensePortrait;
+            ui.SetSeatDisplay(left, leftPortrait, leftHuman, rightPortrait, rightHuman);
+            ui.SetActiveSide(_board.CurrentPlayer);
+        }
+
+        /// <summary>
+        /// Shows or hides the thought bubble for a side. The AI search uses this, and so can anything else
+        /// that makes a player wait, e.g. an online opponent's turn.
+        /// </summary>
+        public void SetThinkingBubble(Player side, bool thinking)
+        {
+            _bubbleShown = thinking;
+            if (ui != null) ui.SetThinking(side, thinking);
+        }
+
+        private void ClearThinkingBubble()
+        {
+            _bubbleShown = false;
+            if (ui != null) ui.ClearThinking();
+        }
+
+        /// <summary>
+        /// Writes how long each AI move took to the console (Unity Console, or `adb logcat -s Unity` on a phone).
+        /// Moves over one second are logged as warnings so slow turns stand out.
+        /// </summary>
+        private static void LogSearchTime(IPlayerAgent agent, float seconds)
+        {
+            var mm = agent as MinimaxAgent;
+            if (mm == null) return;
+            string msg = $"[5x5 AI] {mm.ControlledPlayer} '{mm.Profile.Name}': depth {mm.LastDepthReached}, " +
+                         $"{mm.LastNodes} positions, {mm.LastMilliseconds:F0} ms search ({seconds:F2} s wall clock)";
+            if (seconds > 1f) Debug.LogWarning(msg); else Debug.Log(msg);
         }
 
         private void RestartHintTimer()
@@ -321,7 +445,89 @@ namespace ThreeMusketeers.Gameplay
             List<Coord> movablePieces = _hintRevealed && humanTurn
                 ? _board.GetLegalMoves(_board.CurrentPlayer).Select(m => m.From).Distinct().ToList()
                 : null;
+            // A shown hint looks like "this piece is selected, and this is where it goes".
+            if (_hintMove.HasValue && _selected == null && humanTurn)
+            {
+                boardView.SetSelection(_hintMove.Value.From, new List<Coord> { _hintMove.Value.To }, null);
+                return;
+            }
             boardView.SetSelection(_selected, _legalDestinations, movablePieces);
+        }
+
+        // ---------- hints ----------
+
+        /// <summary>
+        /// THE ONE PLACE hint supply is decided. Hints are unlimited for now, so this always says yes.
+        /// Later: check and deduct from an inventory here (earned / gifted / purchased hints),
+        /// and return false (and open the store) when the player has none.
+        /// </summary>
+        private bool TryConsumeHint()
+        {
+            return true;
+        }
+
+        private bool CanShowHintButton()
+        {
+            return hintsEnabled && _board != null && _matchActive && !_gameOver &&
+                   AgentFor(_board.CurrentPlayer) == null;
+        }
+
+        private void RefreshHintButton()
+        {
+            if (ui != null) ui.SetHintAvailable(CanShowHintButton());
+        }
+
+        private void ClearHint()
+        {
+            if (_hintMove.HasValue)
+            {
+                _hintMove = null;
+                if (_board != null) RefreshSelectionVisual();
+            }
+        }
+
+        /// <summary>The player asked for a hint: find the best move for the side to move and show it on the board.</summary>
+        private void RequestHint()
+        {
+            if (!CanShowHintButton() || _hintBusy) return;
+            if (!TryConsumeHint()) return;
+            StartCoroutine(HintRoutine());
+        }
+
+        private IEnumerator HintRoutine()
+        {
+            _hintBusy = true;
+            if (ui != null) ui.SetHintBusy(true);
+
+            int turnAtRequest = _turnId;
+            Player side = _board.CurrentPlayer;
+            BoardState snapshot = _board.Clone();
+            int depth = Math.Max(1, hintSearchDepth);
+
+            // The hint engine is a MinimaxAgent that plays for the human. It uses the tuned evaluation
+            // for the side, so hints are good, and it is never used for the opponent.
+            var profile = new AIProfile
+            {
+                Name = "Hint", SearchDepth = depth, TopN = 1, BlunderChance = 0f,
+                Opponent = OpponentModel.Optimal, BonusDepthMax = 2, BonusDepthNodeLimit = 600000
+            };
+            EvalWeights weights = side == Player.Defense ? EvalWeights.TunedDefense() : EvalWeights.TunedOffense();
+            var agent = new MinimaxAgent(side, profile, null, weights);
+
+            var task = System.Threading.Tasks.Task.Run(() => agent.ChooseMove(snapshot));
+            while (!task.IsCompleted) yield return null;
+
+            _hintBusy = false;
+            if (ui != null) ui.SetHintBusy(false);
+
+            if (task.IsFaulted) { Debug.LogException(task.Exception); yield break; }
+
+            // The game moved on (a move was made, or a new game started) while we were thinking: drop the result.
+            if (turnAtRequest != _turnId || !CanShowHintButton()) yield break;
+
+            _hintMove = task.Result;
+            ClearSelection();
+            RefreshSelectionVisual();
         }
 
         private string ResolveTurnText()

@@ -24,6 +24,10 @@ namespace ThreeMusketeers.AI
         [Tooltip("Shown in the picker and on the Play screen. Leave empty to show just \"Computer\".")]
         public string displayName = "";
 
+        [Header("Portrait")]
+        [Tooltip("Shown in the in-game top bar (and later the character-select card). Empty = the default computer portrait set on the UI Style asset.")]
+        public Sprite portrait;
+
         [Header("Difficulty (how the player finds it)")]
         [Tooltip("Easy, Medium, Hard or Expert. (Human is not valid here.)")]
         public SeatType tier = SeatType.Medium;

@@ -22,6 +22,9 @@ namespace ThreeMusketeers.AI
     {
         public const float WinScore = 100000f;
 
+        /// <summary>Rough cost multiplier for one more ply of search (used to decide on bonus depth).</summary>
+        public static float NodeGrowthPerPly = 6f;
+
         public Player ControlledPlayer { get; }
         public AIProfile Profile { get; }
 
@@ -38,9 +41,13 @@ namespace ThreeMusketeers.AI
         private Stopwatch _clock;
         private bool _prune;
 
-        public MinimaxAgent(Player controlledPlayer, AIProfile profile, int? seed = null)
+        /// <summary>The evaluation numbers this agent uses (default: chosen by Profile.Evaluation).</summary>
+        public EvalWeights Weights { get; }
+
+        public MinimaxAgent(Player controlledPlayer, AIProfile profile, int? seed = null, EvalWeights weights = null)
         {
             ControlledPlayer = controlledPlayer;
+            Weights = weights ?? EvalWeights.ForSide(controlledPlayer, profile != null ? profile.Evaluation : EvaluationSet.Original);
             Profile = profile ?? throw new ArgumentNullException(nameof(profile));
             _rng = seed.HasValue ? new Random(seed.Value) : new Random();
             _initialDefense = BoardState.BoardSize * BoardState.BoardSize - 3;
@@ -73,8 +80,24 @@ namespace ThreeMusketeers.AI
             // move, so it can't use a narrowed alpha-beta window at the root.
             bool needAllScores = Profile.TopN > 1 || Profile.BlunderChance > 0f;
 
-            List<Scored> scored = ScoreRoot(board, legal, Math.Max(1, Profile.SearchDepth), needAllScores);
-            LastDepthReached = Math.Max(1, Profile.SearchDepth);
+            int depth = Math.Max(1, Profile.SearchDepth);
+            long before = 0;
+            List<Scored> scored = ScoreRoot(board, legal, depth, needAllScores);
+            long lastPassNodes = _nodes - before;
+
+            // Think deeper when it's cheap: add plies while the next one is estimated to stay under the limit.
+            int extra = 0;
+            while (extra < Profile.BonusDepthMax && Profile.BonusDepthNodeLimit > 0 &&
+                   Math.Abs(scored[0].Value) < WinScore / 2 &&
+                   lastPassNodes * NodeGrowthPerPly <= Profile.BonusDepthNodeLimit)
+            {
+                before = _nodes;
+                depth++;
+                extra++;
+                scored = ScoreRoot(board, legal, depth, needAllScores);
+                lastPassNodes = _nodes - before;
+            }
+            LastDepthReached = depth;
 
             LastNodes = _nodes;
             LastMilliseconds = _clock.Elapsed.TotalMilliseconds;
@@ -153,7 +176,7 @@ namespace ThreeMusketeers.AI
 
             GameResult result = board.EvaluateResult();
             if (result != GameResult.InProgress) return Terminal(result, ply);
-            if (depth <= 0) return Evaluate(board);
+            if (depth <= 0) return Leaf(board, ply);
 
             Player toMove = board.CurrentPlayer;
             List<Move> moves = board.GetLegalMoves(toMove);
@@ -247,49 +270,94 @@ namespace ThreeMusketeers.AI
         // ------------------------------------------------------------------
         // Static evaluation, from THIS agent's perspective.
         // ------------------------------------------------------------------
+
+        /// <summary>Evaluation at the end of the search horizon (with the optional forced-alignment check).</summary>
+        private float Leaf(BoardState board, int ply)
+        {
+            if (Weights.DetectForcedAlignment && board.CurrentPlayer == Player.Offense && ForcedAlignment(board))
+                return Terminal(GameResult.DefenseWin, ply + 1);
+            return Evaluate(board);
+        }
+
+        /// <summary>True if Offense is to move, has moves, and every one of them lines all three pieces up.</summary>
+        private static bool ForcedAlignment(BoardState board)
+        {
+            IReadOnlyList<Coord> off = board.OffensePositions;
+            bool any = false;
+            for (int i = 0; i < off.Count; i++)
+            {
+                foreach (Move m in board.GetLegalMovesFrom(off[i]))
+                {
+                    any = true;
+                    Coord a = i == 0 ? m.To : off[0];
+                    Coord b = i == 1 ? m.To : off[1];
+                    Coord c = i == 2 ? m.To : off[2];
+                    if (!((a.X == b.X && b.X == c.X) || (a.Y == b.Y && b.Y == c.Y))) return false;
+                }
+            }
+            return any;
+        }
+
         private float Evaluate(BoardState board)
         {
+            EvalWeights w = Weights;
             // Everything is computed from Offense's point of view, then flipped for Defense.
             IReadOnlyList<Coord> off = board.OffensePositions;
 
             int captured = _initialDefense - board.DefenseCount();
 
-            // Offense mobility = number of capture options Offense has.
-            int mobility = 0;
-            for (int i = 0; i < off.Count; i++)
-                mobility += board.GetLegalMovesFrom(off[i]).Count;
-
-            // Alignment danger: pairs of Offense pieces already sharing a row/column,
-            // plus Offense moves that would line all three up.
-            int danger = 0;
-            for (int i = 0; i < off.Count; i++)
-                for (int j = i + 1; j < off.Count; j++)
-                    if (off[i].X == off[j].X || off[i].Y == off[j].Y) danger++;
+            int mobility = 0, aligningMoves = 0, safeMoves = 0, movable = 0;
             for (int i = 0; i < off.Count; i++)
             {
-                foreach (Move m in board.GetLegalMovesFrom(off[i]))
+                List<Move> moves = board.GetLegalMovesFrom(off[i]);
+                mobility += moves.Count;
+                if (moves.Count > 0) movable++;
+                foreach (Move m in moves)
                 {
                     Coord a = i == 0 ? m.To : off[0];
                     Coord b = i == 1 ? m.To : off[1];
                     Coord c = i == 2 ? m.To : off[2];
-                    if ((a.X == b.X && b.X == c.X) || (a.Y == b.Y && b.Y == c.Y)) danger++;
+                    if ((a.X == b.X && b.X == c.X) || (a.Y == b.Y && b.Y == c.Y)) aligningMoves++;
+                    else safeMoves++;
                 }
             }
 
-            // Exposure: Defense pieces orthogonally adjacent to an Offense piece.
-            int exposed = 0;
+            // Pairs of Offense pieces already sharing a row/column, and total spread.
+            int pairs = 0, spread = 0;
             for (int i = 0; i < off.Count; i++)
+                for (int j = i + 1; j < off.Count; j++)
+                {
+                    if (off[i].X == off[j].X || off[i].Y == off[j].Y) pairs++;
+                    spread += Math.Abs(off[i].X - off[j].X) + Math.Abs(off[i].Y - off[j].Y);
+                }
+
+            // Exposure: Defense pieces orthogonally adjacent to an Offense piece.
+            int exposed = 0, edge = 0, corner = 0;
+            const int last = BoardState.BoardSize - 1;
+            for (int i = 0; i < off.Count; i++)
+            {
                 foreach (Coord dir in Coord.OrthogonalDirections)
                 {
                     Coord n = off[i].Offset(dir.X, dir.Y);
                     if (BoardState.IsInBounds(n) && board.GetPiece(n) == PieceType.Defense) exposed++;
                 }
+                bool ex = off[i].X == 0 || off[i].X == last, ey = off[i].Y == 0 || off[i].Y == last;
+                if (ex || ey) edge++;
+                if (ex && ey) corner++;
+            }
 
             float offenseScore =
-                10f * captured +
-                2f * mobility -
-                15f * danger +
-                3f * exposed;
+                w.Capture * captured +
+                w.Mobility * mobility +
+                w.AlignedPair * pairs +
+                w.AligningMove * aligningMoves +
+                w.Exposed * exposed;
+
+            if (w.SafeMoves != 0f) offenseScore += w.SafeMoves * safeMoves;
+            if (w.MovablePieces != 0f) offenseScore += w.MovablePieces * movable;
+            if (w.Edge != 0f) offenseScore += w.Edge * edge;
+            if (w.Corner != 0f) offenseScore += w.Corner * corner;
+            if (w.Spread != 0f) offenseScore += w.Spread * spread;
 
             return ControlledPlayer == Player.Offense ? offenseScore : -offenseScore;
         }

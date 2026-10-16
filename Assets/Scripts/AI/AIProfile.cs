@@ -52,6 +52,32 @@ namespace ThreeMusketeers.AI
         /// <summary>How many half-moves (plies) ahead the AI simulates. 1 = only its own move.</summary>
         public int SearchDepth = 3;
 
+        /// <summary>
+        /// Think deeper when it is cheap (late game, few pieces left). After the normal
+        /// search the AI estimates what one more ply would cost; if that is under
+        /// BonusDepthNodeLimit it searches one ply deeper, and repeats, up to
+        /// BonusDepthMax extra plies. 0 = off. Deterministic: it counts positions
+        /// searched, not seconds, so it behaves the same on every device.
+        /// </summary>
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Tooltip("LATE-GAME THINKING: the most extra plies (half-moves) the AI may add when a turn is cheap to search. 0 = off. Typical: 2.")]
+#endif
+        public int BonusDepthMax = 0;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Tooltip("LATE-GAME THRESHOLD: a bonus ply is only added if its estimated cost is under this many positions. Higher = thinks deeper for longer into the game (and takes longer per turn). Typical: 600000. 0 = off.")]
+#endif
+        public int BonusDepthNodeLimit = 0;
+
+        /// <summary>
+        /// Which static evaluation the AI judges positions with. Original = how it always played.
+        /// Tuned = numbers found by self-play tuning. This only changes DEFENSE play (much stronger at
+        /// the same depth); an AI playing Offense uses the original numbers either way.
+        /// </summary>
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Tooltip("Original = how the AI always judged positions. Tuned = self-play-tuned numbers. Only changes Defense play (much stronger); an AI playing Offense is unchanged.")]
+#endif
+        public EvaluationSet Evaluation = EvaluationSet.Original;
+
         // ---- 2. Move randomness -----------------------------------------
         /// <summary>Pick uniformly among the top N scored moves. 1 = always the best move.</summary>
         public int TopN = 1;
@@ -99,11 +125,17 @@ namespace ThreeMusketeers.AI
             Opponent = OpponentModel.Optimal
         };
 
-        /// <summary>Deepest preset. Desktop mid-game depth 8 averaged ~0.23s (max ~0.9s) in testing; depth 9 averaged ~0.55s (max ~1.8s). Phones not yet measured.</summary>
+        /// <summary>
+        /// Deepest preset: depth 8, tuned Defense evaluation, and up to 2 bonus plies when a
+        /// turn is cheap (late game). Depth 9 was tried and judged too slow on a desktop, so 8 it is.
+        /// The GameManager logs every AI move's time so phone speed can be checked.
+        /// </summary>
         public static AIProfile Expert() => new AIProfile
         {
             Name = "Expert", SearchDepth = 8, TopN = 1, BlunderChance = 0f,
-            Opponent = OpponentModel.Optimal
+            Opponent = OpponentModel.Optimal,
+            Evaluation = EvaluationSet.Tuned,
+            BonusDepthMax = 2, BonusDepthNodeLimit = 600000
         };
     }
 }
