@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a708af6a104f1d44e90ed818d213ff06, type: 3}
+  m_Name: DefaultEasy
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeMusketeers.AI.OpponentDefinition
+  opponentId: default-easy
+  displayName: Mr. Breezy
+  tier: 1
+  styleAdjectives:
+  - Shortsighted
+  - Careless
+  profile:
+    Name: Mr. Breezy
+    SearchDepth: 1
+    TopN: 4
+    BlunderChance: 0.25
+    BlunderSeverityCap: 30
+    Opponent: 2

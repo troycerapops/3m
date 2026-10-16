@@ -1,4 +1,5 @@
 using ThreeMusketeers.Core;
+using ThreeMusketeers.UI;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -15,9 +16,9 @@ namespace ThreeMusketeers.Theming
     /// art exists -- your son can drop his Blender exports in later without
     /// anyone touching code.
     ///
-    /// Create one via Assets > Create > Three Musketeers > Theme Definition.
+    /// Create one via Assets > Create > 5x5 > Theme Definition.
     /// </summary>
-    [CreateAssetMenu(fileName = "NewTheme", menuName = "Three Musketeers/Theme Definition")]
+    [CreateAssetMenu(fileName = "NewTheme", menuName = "5x5/Theme Definition")]
     public class ThemeDefinition : ScriptableObject
     {
         [Header("Identity")]
@@ -107,6 +108,9 @@ namespace ThreeMusketeers.Theming
                  "Author it at your target screen's aspect ratio (portrait, matching the game's orientation " +
                  "lock) for the cleanest result. Leave empty to just use the solid Background Color above.")]
         public Sprite backgroundImage;
+
+        [Header("UI style overrides (optional - empty fields keep the brand look from UIStyle)")]
+        public UIStyleOverrides uiOverrides = new UIStyleOverrides();
 
         [Header("Display text")]
         public string offenseLabel = "Offense";

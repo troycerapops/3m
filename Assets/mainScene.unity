@@ -11677,6 +11677,9 @@ MonoBehaviour:
   boardView: {fileID: 1717924833}
   ui: {fileID: 1844149308}
   hintDelaySeconds: 5
+  offenseSeat: 0
+  defenseSeat: 0
+  aiMoveDelaySeconds: 1
 --- !u!4 &876575735
 Transform:
   m_ObjectHideFlags: 0
@@ -16641,47 +16644,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ThreeMusketeers.UI.MainMenuController
   boardView: {fileID: 1717924833}
   gameManager: {fileID: 876575734}
+  uiStyle: {fileID: 11400000, guid: 3390b645a64d85f44b54d8c8e430508b, type: 2}
   availableThemes:
   - {fileID: 11400000, guid: 9a5ef3a2bbd3db3459c1f903288713de, type: 2}
   - {fileID: 11400000, guid: 511b5249918ef014481e38dcac68bc78, type: 2}
+  availableOpponents:
+  - {fileID: 11400000, guid: 08984bbcaaffe3d478a9ce100c6cd430, type: 2}
+  - {fileID: 11400000, guid: 79759729beb184f4fadfb136046402f5, type: 2}
+  - {fileID: 11400000, guid: 1aca01aba4b5df84f9f1da6a9a9c2109, type: 2}
+  - {fileID: 11400000, guid: 28e95af141c474649a1ba14021f3d1eb, type: 2}
   menuPlaylist:
   - {fileID: 8300000, guid: d16cac38d5b98d2418805ec7fd9410a4, type: 3}
   gameTitleText: 
   titleBackgroundSprite: {fileID: -6069047985388959294, guid: 1bc1c46661ef2a8478dfcf215a232ef4, type: 3}
-  buttonArt:
-    selectThemeButtonSprite: {fileID: -7370707115096170454, guid: 5d142d68b62c7ea4fac70f217211c995, type: 3}
-    startGameButtonSprite: {fileID: -3251669722322308248, guid: d3c24f6504b439a48b62a84adbb9b385, type: 3}
-    settingsButtonSprite: {fileID: 6794642352664929793, guid: 014d4e130e6e52c49979c85f13f5e756, type: 3}
-    quitButtonSprite: {fileID: -6175466954108407554, guid: bc7e50d3905da6f4a801a2537e88b3b7, type: 3}
-    resumeButtonSprite: {fileID: -3251669722322308248, guid: d3c24f6504b439a48b62a84adbb9b385, type: 3}
-    goToMainMenuButtonSprite: {fileID: 5367108691682052964, guid: e3c243265cd10c943804267d8b65e0da, type: 3}
-    backButtonSprite: {fileID: -2794686967927790184, guid: 9983c69b3ab61614ea72d971be19a686, type: 3}
-    themeListButtonSprite: {fileID: 5228725860566194280, guid: 6af21e467d4d6724cbfa50bf8d2cc31c, type: 3}
-  buttonHeights:
-    selectThemeButtonHeightScale: 1
-    startGameButtonHeightScale: 1
-    settingsButtonHeightScale: 1
-    quitButtonHeightScale: 1
-    resumeButtonHeightScale: 1
-    goToMainMenuButtonHeightScale: 1
-    themeListButtonHeightScale: 1
-  buttonLayout:
-    buttonWidthFraction: 0.703
-    buttonSpacingFraction: 0.015
-    buttonHeightScale: 1
-    placeholderButtonHeight: 90
-  background:
-    menuBackgroundColor: {r: 1, g: 1, b: 1, a: 1}
-    menuBackgroundOpacity: 0.92
-    menuTextColor: {r: 0.1, g: 0.1, b: 0.12, a: 1}
-  text:
-    menuFont: {fileID: 12800000, guid: de62b9e533d25734196ba848231b2594, type: 3}
-    menuFontStyle: 0
-    titleFontSize: 64
-    buttonFontSize: 64
-    bodyFontSize: 28
-    noteFontSize: 22
-    buttonTextColor: {r: 0.96862745, g: 0.96862745, b: 0.96862745, a: 1}
+  settingsIconAnchor: {x: 0.93, y: 0.94}
+  settingsIconSize: 100
+  storeUnlocked: 0
+  storeIconAnchor: {x: 0.14, y: 0.94}
+  storeIconSize: 100
+  storeItemName: Placeholder Item
+  storeItemPrice: $0.00
+  storeItemInfo: Placeholder description. This is where the item's details will go.
+  storeItemImage: {fileID: 0}
+  showQuitOnMobile: 0
+  showWatchMode: 0
+  gameOverDelaySeconds: 1.5
 --- !u!1 &1262668320
 GameObject:
   m_ObjectHideFlags: 0
@@ -22660,6 +22647,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ThreeMusketeers.UI.GameUIController
   mainMenu: {fileID: 1260101639}
+  uiStyle: {fileID: 11400000, guid: 3390b645a64d85f44b54d8c8e430508b, type: 2}
+  barHeight: 120
+  barTopMargin: 20
 --- !u!224 &1844149309
 RectTransform:
   m_ObjectHideFlags: 0

@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a708af6a104f1d44e90ed818d213ff06, type: 3}
+  m_Name: DefaultHard
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeMusketeers.AI.OpponentDefinition
+  opponentId: default-hard
+  displayName: 
+  tier: 3
+  styleAdjectives:
+  - Calculating
+  - Steady
+  profile:
+    Name: Hard
+    SearchDepth: 5
+    TopN: 1
+    BlunderChance: 0
+    BlunderSeverityCap: 20
+    Opponent: 0

@@ -1,172 +1,94 @@
-using System;
+using ThreeMusketeers.Theming;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace ThreeMusketeers.UI
 {
     /// <summary>
-    /// Builds the turn indicator and game-over overlay entirely from code
-    /// (same philosophy as Board3DView: no prefabs, minimal manual scene setup).
-    /// Theme-agnostic by design -- see SetTurnText/ShowGameOver below.
-    /// Attach this to a full-screen RectTransform inside your Canvas, above
-    /// (later in the hierarchy than) the board so the overlay draws on top.
+    /// The in-game HUD: a top bar showing whose turn it is (or the result once
+    /// the game ends), with the settings gear and a Pause button on its right.
+    ///
+    /// Everything else - Pause menu, Settings, game-over screen - belongs to
+    /// MainMenuController; this class only has the two buttons that open them.
+    /// Theme-agnostic: it renders whatever text GameManager gives it.
+    ///
+    /// Scene setup: attach to a full-screen RectTransform inside your Canvas,
+    /// EARLIER in the hierarchy than the MainMenuController object, so menu
+    /// screens draw on top of the HUD.
     /// </summary>
     [RequireComponent(typeof(RectTransform))]
     public class GameUIController : MonoBehaviour
     {
-
-        /// <summary>
-        /// How many pixels of unsafe space (notch, status bar, camera
-        /// cutout, etc.) sit at the very top of the screen on this device.
-        /// 0 on a plain rectangular display. Used to keep top-anchored UI
-        /// clear of it automatically, on whatever phone this runs on.
-        /// </summary>
-        private static float TopSafeInset => Screen.height - Screen.safeArea.yMax;
-        public event Action RestartRequested;
-
-        private Text _turnText;
-        private GameObject _gameOverPanel;
-        private Text _gameOverText;
-
         [Header("Scene references")]
         [SerializeField] private MainMenuController mainMenu;
 
+        [Header("Look - the same UI Style asset MainMenuController uses")]
+        [Tooltip("Leave empty to use built-in defaults.")]
+        [SerializeField] private UIStyle uiStyle;
+
+        [Header("Bar layout (pixels at your Canvas Scaler's reference resolution)")]
+        [SerializeField] private float barHeight = 120f;
+        [SerializeField] private float barTopMargin = 20f;
+
+        private UIBuilder _ui;
+        private TextMeshProUGUI _turnText;
+
         private void Awake()
         {
-            BuildTurnLabel();
-            BuildGameOverPanel();
-            BuildMenuButton();
+            _ui = new UIBuilder(uiStyle);
+            BuildBar();
         }
 
-      private void BuildTurnLabel()
+        private void BuildBar()
         {
+            // Keep everything inside the safe area so the bar clears notches and cutouts.
+            var safeGo = new GameObject("HudSafeArea", typeof(RectTransform));
+            safeGo.transform.SetParent(transform, false);
+            var safeRect = safeGo.GetComponent<RectTransform>();
+            UIBuilder.Stretch(safeRect);
+            safeGo.AddComponent<SafeAreaFitter>();
+
             var bar = new GameObject("TurnBar", typeof(RectTransform));
-            bar.transform.SetParent(transform, false);
+            bar.transform.SetParent(safeRect, false);
             var barRect = bar.GetComponent<RectTransform>();
             barRect.anchorMin = new Vector2(0f, 1f);
             barRect.anchorMax = new Vector2(1f, 1f);
             barRect.pivot = new Vector2(0.5f, 1f);
-            barRect.sizeDelta = new Vector2(0f, 120f);
-            // Push the bar down clear of the device's notch/status bar/
-            // camera cutout, plus a little extra breathing room beyond
-            // that so it's not sitting flush against the safe edge either.
-            barRect.anchoredPosition = new Vector2(0f, -(TopSafeInset + 20f));
-            bar.AddComponent<Image>().color = Color.white;
+            barRect.sizeDelta = new Vector2(0f, barHeight);
+            barRect.anchoredPosition = new Vector2(0f, -barTopMargin);
+            bar.AddComponent<Image>().color = _ui.Style.hudBarColor;
 
-            var go = new GameObject("TurnText", typeof(RectTransform));
-            go.transform.SetParent(bar.transform, false);
-            var rect = go.GetComponent<RectTransform>();
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = new Vector2(-120f, 0f);
+            // Buttons: gear at the far right, Pause just to its left.
+            float size = Mathf.Min(_ui.Style.iconButtonSize, barHeight - 20f);
+            float gap = 15f;
 
-            _turnText = go.AddComponent<Text>();
-            _turnText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            _turnText.alignment = TextAnchor.MiddleCenter;
-            _turnText.fontSize = 48;
-            _turnText.color = Color.black;
-            _turnText.resizeTextForBestFit = true;
-            _turnText.resizeTextMinSize = 24;
-            _turnText.resizeTextMaxSize = 48;
+            _turnText = _ui.Label(bar.transform, "TurnText", "", TextKind.Hud);
+            _turnText.rectTransform.anchorMin = Vector2.zero;
+            _turnText.rectTransform.anchorMax = Vector2.one;
+            _turnText.rectTransform.offsetMin = new Vector2(gap, 0f);
+            _turnText.rectTransform.offsetMax = new Vector2(-(gap + (size + gap) * 2f), 0f);
+
+            var gear = _ui.IconButton(bar.transform, "SettingsButton", _ui.Style.iconSettings, "Set",
+                () => { if (mainMenu != null) mainMenu.OpenSettings(); }, size);
+            PlaceTopRight(gear, gap, size, barHeight);
+
+            var pause = _ui.IconButton(bar.transform, "PauseButton", _ui.Style.iconPause, "II",
+                () => { if (mainMenu != null) mainMenu.OpenPause(); }, size);
+            PlaceTopRight(pause, gap + size + gap, size, barHeight);
         }
 
-        /// <summary>
-        /// Small square button, fixed to the top-right corner regardless of
-        /// screen size, that reopens the Main Menu over the board mid-game.
-        /// Drawn as three plain bars (the classic hamburger glyph) rather
-        /// than a font character, so it doesn't depend on the font having
-        /// that symbol -- swap in a real icon sprite later the same way
-        /// every other placeholder visual in this project gets swapped.
-        /// </summary>
-        private void BuildMenuButton()
+        private static void PlaceTopRight(Button button, float fromRight, float size, float barHeight)
         {
-            var buttonGo = new GameObject("MenuButton", typeof(RectTransform));
-            buttonGo.transform.SetParent(transform, false);
-            var buttonRect = buttonGo.GetComponent<RectTransform>();
-            buttonRect.anchorMin = new Vector2(1f, 1f);
-            buttonRect.anchorMax = new Vector2(1f, 1f);
-            buttonRect.pivot = new Vector2(1f, 1f);
-            buttonRect.sizeDelta = new Vector2(90f, 90f);
-            buttonRect.anchoredPosition = new Vector2(-15f, -(TopSafeInset + 15f));
-            var buttonImage = buttonGo.AddComponent<Image>();
-            buttonImage.color = new Color(0.15f, 0.15f, 0.15f, 0.85f);
-            var button = buttonGo.AddComponent<Button>();
-            button.targetGraphic = buttonImage;
-            button.onClick.AddListener(() => { if (mainMenu != null) mainMenu.Open(); });
-
-            float[] barY = { 20f, 40f, 60f };
-            foreach (var y in barY)
-            {
-                var barGo = new GameObject("Bar", typeof(RectTransform));
-                barGo.transform.SetParent(buttonGo.transform, false);
-                var barRect = barGo.GetComponent<RectTransform>();
-                barRect.anchorMin = new Vector2(0.2f, 0f);
-                barRect.anchorMax = new Vector2(0.8f, 0f);
-                barRect.pivot = new Vector2(0.5f, 0f);
-                barRect.sizeDelta = new Vector2(0f, 10f);
-                barRect.anchoredPosition = new Vector2(0f, y);
-                barGo.AddComponent<Image>().color = Color.white;
-            }
+            var rect = (RectTransform)button.transform;
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 1f);
+            rect.anchoredPosition = new Vector2(-fromRight, -(barHeight - size) * 0.5f);
         }
 
-        private void BuildGameOverPanel()
+        /// <summary>Restyles the HUD for the theme's font overrides. Called by GameManager when a match starts.</summary>
+        public void ApplyTheme(ThemeDefinition theme)
         {
-            _gameOverPanel = new GameObject("GameOverPanel", typeof(RectTransform));
-            _gameOverPanel.transform.SetParent(transform, false);
-            var panelRect = _gameOverPanel.GetComponent<RectTransform>();
-            panelRect.anchorMin = Vector2.zero;
-            panelRect.anchorMax = Vector2.one;
-            panelRect.offsetMin = Vector2.zero;
-            panelRect.offsetMax = Vector2.zero;
-
-            var backdrop = _gameOverPanel.AddComponent<Image>();
-            backdrop.color = new Color(0f, 0f, 0f, 0.75f);
-
-            var textGo = new GameObject("ResultText", typeof(RectTransform));
-            textGo.transform.SetParent(_gameOverPanel.transform, false);
-            var textRect = textGo.GetComponent<RectTransform>();
-            textRect.anchorMin = new Vector2(0.1f, 0.55f);
-            textRect.anchorMax = new Vector2(0.9f, 0.8f);
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
-
-            _gameOverText = textGo.AddComponent<Text>();
-            _gameOverText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            _gameOverText.alignment = TextAnchor.MiddleCenter;
-            _gameOverText.fontSize = 56;
-            _gameOverText.color = Color.black;
-
-            var buttonGo = new GameObject("RestartButton", typeof(RectTransform));
-            buttonGo.transform.SetParent(_gameOverPanel.transform, false);
-            var buttonRect = buttonGo.GetComponent<RectTransform>();
-            buttonRect.anchorMin = new Vector2(0.3f, 0.35f);
-            buttonRect.anchorMax = new Vector2(0.7f, 0.48f);
-            buttonRect.offsetMin = Vector2.zero;
-            buttonRect.offsetMax = Vector2.zero;
-
-            var buttonImage = buttonGo.AddComponent<Image>();
-            buttonImage.color = new Color(0.2f, 0.55f, 0.9f);
-            var button = buttonGo.AddComponent<Button>();
-            button.targetGraphic = buttonImage;
-            button.onClick.AddListener(() => RestartRequested?.Invoke());
-
-            var buttonLabelGo = new GameObject("Label", typeof(RectTransform));
-            buttonLabelGo.transform.SetParent(buttonGo.transform, false);
-            var buttonLabelRect = buttonLabelGo.GetComponent<RectTransform>();
-            buttonLabelRect.anchorMin = Vector2.zero;
-            buttonLabelRect.anchorMax = Vector2.one;
-            buttonLabelRect.offsetMin = Vector2.zero;
-            buttonLabelRect.offsetMax = Vector2.zero;
-
-            var buttonLabel = buttonLabelGo.AddComponent<Text>();
-            buttonLabel.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            buttonLabel.alignment = TextAnchor.MiddleCenter;
-            buttonLabel.fontSize = 36;
-            buttonLabel.color = Color.white;
-            buttonLabel.text = "Play Again";
-
-            _gameOverPanel.SetActive(false);
+            if (_ui != null) _ui.SetTheme(theme);
         }
 
         /// <summary>
@@ -176,18 +98,22 @@ namespace ThreeMusketeers.UI
         /// </summary>
         public void SetTurnText(string text)
         {
-            _turnText.text = text;
+            if (_turnText != null) _turnText.text = text;
         }
 
+        /// <summary>
+        /// The game is over: the bar shows the result and stays showing it, even
+        /// after the player closes the game-over screen to look at the board.
+        /// (The game-over screen itself is MainMenuController's.)
+        /// </summary>
         public void ShowGameOver(string resultText)
         {
-            _gameOverText.text = resultText;
-            _gameOverPanel.SetActive(true);
+            SetTurnText(resultText);
         }
 
+        /// <summary>A new match is starting. The turn text is set right after this, so there is nothing to hide.</summary>
         public void HideGameOver()
         {
-            _gameOverPanel.SetActive(false);
         }
     }
 }

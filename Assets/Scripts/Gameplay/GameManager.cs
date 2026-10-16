@@ -1,6 +1,8 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using ThreeMusketeers.AI;
 using ThreeMusketeers.Core;
 using ThreeMusketeers.UI;
 using UnityEngine;
@@ -14,13 +16,18 @@ namespace ThreeMusketeers.Gameplay
     /// Board3DView.Theme) -- this class never hardcodes theme wording, so a
     /// reskin never means editing this file.
     ///
-    /// Phase 2 (AI opponent) hook: to make one side computer-controlled,
-    /// assign an IPlayerAgent (see ThreeMusketeers.AI) for that Player and,
-    /// in HandleCellClicked, ignore taps while it's the agent's turn; instead,
-    /// after RefreshSelectionVisual() whenever _board.CurrentPlayer equals the
-    /// agent's ControlledPlayer, call agent.ChooseMove(_board) and feed it
-    /// into the same ApplyMove path. Everything else here is already
-    /// agent-agnostic.
+    /// AI seats: each side (Offense / Defense) is either a human (taps on the
+    /// board) or an AI (a MinimaxAgent built from an AIProfile preset). There
+    /// is no default AI - both seats are Human unless chosen. Two humans =
+    /// hotseat; human + AI = normal; two AIs = watch mode. An AI move goes
+    /// through the very same ApplyMove path a human move does. Seats come from
+    /// the two Inspector fields below, or from the menu calling SetSeats()
+    /// before StartNewGame().
+    ///
+    /// Match lifecycle (used by the menu): MatchInProgress is true from
+    /// StartNewGame() until the game ends or AbandonMatch() is called. When a
+    /// game ends, GameEnded fires with the result and the theme's win text so
+    /// the menu can show its game-over screen.
     ///
     /// Mechanic-pack hook: pass a non-default IRuleSet into `new
     /// BoardState(customRuleSet)` in StartNewGame() to change legal moves /
@@ -37,37 +44,97 @@ namespace ThreeMusketeers.Gameplay
                  "(e.g. 0.3) while testing; the real game probably wants something like 5-7 seconds.")]
         [SerializeField] private float hintDelaySeconds = 0.3f;
 
+        [Header("Seats (who controls each side)")]
+        [Tooltip("Human = taps on the board. Easy/Medium/Hard/Expert = computer. " +
+                 "The main menu can override these by calling SetSeats() before StartNewGame().")]
+        [SerializeField] private SeatType offenseSeat = SeatType.Human;
+        [SerializeField] private SeatType defenseSeat = SeatType.Human;
+
+        [Tooltip("Pause before an AI move so the previous move's animation can finish. " +
+                 "Set this to at least as long as your capture animation.")]
+        [SerializeField] private float aiMoveDelaySeconds = 1.0f;
+
         private BoardState _board;
+        private IPlayerAgent _offenseAgent;   // null = human
+        private IPlayerAgent _defenseAgent;   // null = human
+        private Coroutine _aiCoroutine;
         private Coord? _selected;
         private List<Coord> _legalDestinations;
         private bool _gameOver;
+        private bool _matchActive;
         private bool _hintRevealed;
         private Coroutine _hintCoroutine;
 
+        /// <summary>True while a match is being played (not yet won, not abandoned).</summary>
+        public bool MatchInProgress => _matchActive && !_gameOver;
+
+        /// <summary>Raised once when a match ends: the result and the theme's win text.</summary>
+        public event Action<GameResult, string> GameEnded;
+
         private void Start()
         {
-            // Deliberately does NOT call StartNewGame() here -- that used to
-            // build the board and set turn text the instant the scene
-            // loaded, which showed through underneath the (only ~92%
-            // opaque) menu. Now the game only actually starts once
-            // MainMenuController's Play button calls StartNewGame() itself
-            // (see MainMenuController.OnStartGame).
+            // Deliberately does NOT call StartNewGame() here: the game only
+            // starts once the menu's Start / Rematch button calls it
+            // (see MainMenuController.StartMatch).
             boardView.CellClicked += HandleCellClicked;
-            if (ui != null) ui.RestartRequested += StartNewGame;
+
+            // Seats from the Inspector. A menu that calls SetSeats() later replaces these.
+            SetSeats(offenseSeat, defenseSeat);
         }
 
         private void OnDestroy()
         {
             if (boardView != null) boardView.CellClicked -= HandleCellClicked;
-            if (ui != null) ui.RestartRequested -= StartNewGame;
+            Time.timeScale = 1f; // never leave the game frozen if this object goes away
+        }
+
+        /// <summary>
+        /// Ends the current match without a result (Quit to Main Menu): stops
+        /// the AI and timers and locks the board. Safe to call at any time.
+        /// </summary>
+        public void AbandonMatch()
+        {
+            _matchActive = false;
+            _gameOver = true;
+            if (_aiCoroutine != null) StopCoroutine(_aiCoroutine);
+            _aiCoroutine = null;
+            if (_hintCoroutine != null) StopCoroutine(_hintCoroutine);
+            _hintCoroutine = null;
+            ClearSelection();
+            if (_board != null)
+            {
+                boardView.SetBoardInteractable(false);
+                RefreshSelectionVisual();
+            }
+        }
+
+        /// <summary>
+        /// Choose who controls each side: null = human, otherwise an AI built
+        /// from that profile. Call BEFORE StartNewGame(); it takes effect from
+        /// the next game (including restarts).
+        /// </summary>
+        public void SetSeats(AIProfile offenseAI, AIProfile defenseAI)
+        {
+            _offenseAgent = offenseAI == null ? null : new MinimaxAgent(Player.Offense, offenseAI);
+            _defenseAgent = defenseAI == null ? null : new MinimaxAgent(Player.Defense, defenseAI);
+        }
+
+        /// <summary>Convenience overload for UI dropdowns: SetSeats(SeatType.Human, SeatType.Hard).</summary>
+        public void SetSeats(SeatType offense, SeatType defense)
+        {
+            SetSeats(AIProfile.FromSeat(offense), AIProfile.FromSeat(defense));
         }
 
         public void StartNewGame()
         {
+            if (_aiCoroutine != null) StopCoroutine(_aiCoroutine);
+            _aiCoroutine = null;
+
             _board = new BoardState();
             _selected = null;
             _legalDestinations = null;
             _gameOver = false;
+            _matchActive = true;
 
             if (_hintCoroutine != null) StopCoroutine(_hintCoroutine);
             // The opening turn shows its hint immediately -- no reason to
@@ -82,9 +149,12 @@ namespace ThreeMusketeers.Gameplay
 
             if (ui != null)
             {
+                ui.ApplyTheme(boardView.Theme);
                 ui.HideGameOver();
                 ui.SetTurnText(ResolveTurnText());
             }
+
+            MaybeStartAITurn();
         }
 
         private void HandleCellClicked(Coord coord)
@@ -94,7 +164,10 @@ namespace ThreeMusketeers.Gameplay
             // until Play is pressed, but this guards against a stray event
             // reaching here before _board exists, e.g. right after Restart
             // if that path is ever wired up before StartNewGame() runs.
-            if (_board == null || _gameOver) return;
+            if (_board == null || _gameOver || !_matchActive) return;
+
+            // Taps are ignored while it's an AI seat's turn.
+            if (AgentFor(_board.CurrentPlayer) != null) return;
 
             var clickedPiece = _board.GetPiece(coord);
             var currentPieceType = _board.CurrentPlayer.ToPieceType();
@@ -182,10 +255,13 @@ namespace ThreeMusketeers.Gameplay
             if (result != GameResult.InProgress)
             {
                 _gameOver = true;
+                _matchActive = false;
                 boardView.SetBoardInteractable(false);
                 RefreshSelectionVisual();
-                if (ui != null) ui.ShowGameOver(ResolveWinText(result));
+                string winText = ResolveWinText(result);
+                if (ui != null) ui.ShowGameOver(winText);
                 if (AudioManager.Instance != null) AudioManager.Instance.PlayWinSound(result);
+                if (GameEnded != null) GameEnded(result, winText);
             }
             else
             {
@@ -194,7 +270,34 @@ namespace ThreeMusketeers.Gameplay
                 RefreshSelectionVisual();
 
                 if (ui != null) ui.SetTurnText(ResolveTurnText());
+
+                MaybeStartAITurn();
             }
+        }
+
+        private IPlayerAgent AgentFor(Player player) =>
+            player == Player.Offense ? _offenseAgent : _defenseAgent;
+
+        private void MaybeStartAITurn()
+        {
+            if (_gameOver || !_matchActive || _board == null) return;
+
+            var agent = AgentFor(_board.CurrentPlayer);
+            if (agent == null) return;
+
+            if (_aiCoroutine != null) StopCoroutine(_aiCoroutine);
+            _aiCoroutine = StartCoroutine(AITurn(agent));
+        }
+
+        private IEnumerator AITurn(IPlayerAgent agent)
+        {
+            yield return new WaitForSeconds(aiMoveDelaySeconds);
+            if (_gameOver || !_matchActive || _board == null) yield break;
+
+            // The search runs on a copy; the live board is never touched by the AI.
+            Move move = agent.ChooseMove(_board.Clone());
+            _aiCoroutine = null;
+            ApplyMove(move);
         }
 
         private void RestartHintTimer()
@@ -213,7 +316,9 @@ namespace ThreeMusketeers.Gameplay
 
         private void RefreshSelectionVisual()
         {
-            List<Coord> movablePieces = _hintRevealed
+            if (_board == null) return;
+            bool humanTurn = AgentFor(_board.CurrentPlayer) == null;
+            List<Coord> movablePieces = _hintRevealed && humanTurn
                 ? _board.GetLegalMoves(_board.CurrentPlayer).Select(m => m.From).Distinct().ToList()
                 : null;
             boardView.SetSelection(_selected, _legalDestinations, movablePieces);
