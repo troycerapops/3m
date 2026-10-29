@@ -21,8 +21,8 @@ MonoBehaviour:
   tilePrefab: {fileID: 0}
   lightTileMaterial: {fileID: 0}
   darkTileMaterial: {fileID: 0}
-  environmentPrefab: {fileID: 0}
-  wholeBoardArt: 0
+  environmentPrefab: {fileID: 7738672067231411172, guid: a38378fa8bf0a8648bfc8e7a61ee1528, type: 3}
+  wholeBoardArt: 1
   suppliesOwnLighting: 0
   pieceIdleEnabled: 0
   idleVariantCount: 1
@@ -47,6 +47,14 @@ MonoBehaviour:
   ownedGlowBlend: 0.8
   backgroundColor: {r: 0.75, g: 0.78, b: 0.82, a: 1}
   backgroundImage: {fileID: 883801813797394586, guid: ae75858d0d0324d4ca68a63a636636d0, type: 3}
+  uiOverrides:
+    titleFont: {fileID: 0}
+    buttonFont: {fileID: 0}
+    bodyFont: {fileID: 0}
+    overridePrimaryButtonColor: 0
+    primaryButtonColor: {r: 0.25, g: 0.6, b: 0.35, a: 1}
+    homeBackground: {fileID: 0}
+    logo: {fileID: 0}
   offenseLabel: Offense
   defenseLabel: Defense
   offenseTurnText: tap an {Label} piece, then a {OpponentLabel} to capture.

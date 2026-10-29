@@ -8,6 +8,17 @@ using UnityEngine.InputSystem;
 
 namespace ThreeMusketeers.Gameplay
 {
+    /// <summary>How a theme's Background Image is fitted to the screen (see Board3DView.backgroundFit).</summary>
+    public enum BackgroundFitMode
+    {
+        /// <summary>Scale evenly until the screen is completely filled; crop the overflow. No distortion.</summary>
+        Cover = 0,
+        /// <summary>Scale evenly until the whole image is visible; leftover space shows the camera background color.</summary>
+        Contain = 1,
+        /// <summary>Squeeze to the exact screen shape. Distorts unless the art matches the phone's shape.</summary>
+        Stretch = 2
+    }
+
     /// <summary>
     /// Builds and drives the 5x5 board as real 3D GameObjects (world space,
     /// fixed camera -- see BoardCameraRig), themed entirely through a
@@ -53,6 +64,14 @@ namespace ThreeMusketeers.Gameplay
                  "than the board/pieces/environment so nothing gets hidden behind it. The default is safely " +
                  "behind a normal-sized board; only worth touching if you notice clipping either way.")]
         [SerializeField] private float backgroundDistance = 40f;
+        [Tooltip("How the theme's Background Image fills the screen. Cover (recommended) = scale the image evenly until it fills " +
+                 "the whole screen and crop whatever spills over, so it never looks stretched on any phone shape. " +
+                 "Contain = whole image visible, camera background color shows in any leftover space. " +
+                 "Stretch = squeeze to the screen shape (distorts unless the art is made at the phone's exact shape).")]
+        [SerializeField] private BackgroundFitMode backgroundFit = BackgroundFitMode.Cover;
+        [Tooltip("Cover mode only: which part of the image stays visible when the sides or top/bottom are cropped. " +
+                 "(0.5, 0.5) = centre. X: 0 = keep the left edge, 1 = keep the right edge. Y: 0 = keep the bottom, 1 = keep the top.")]
+        [SerializeField] private Vector2 backgroundFocus = new Vector2(0.5f, 0.5f);
 
         [Header("Lighting")]
         [Tooltip("The scene's default light(s) (e.g. the Directional Light) -- switched off automatically " +
@@ -68,6 +87,11 @@ namespace ThreeMusketeers.Gameplay
         private readonly List<Transform> _exitPoints = new List<Transform>();
         private bool _inputEnabled = true;
         private SpriteRenderer _backgroundRenderer; // theme's optional full backdrop image, parented to the camera -- see ApplyThemeCameraBackground
+        private const string BackgroundObjectName = "ThemeBackground";
+        // Camera values the background was last fitted to; Update() refits when any of them changes
+        // (field of view from BoardCameraRig, a different phone aspect, window resize...).
+        private float _fitFov, _fitAspect, _fitOrthoSize;
+        private bool _fitOrthographic;
 
         /// <summary>
         /// Every child of the environment prefab whose name starts with
@@ -192,11 +216,13 @@ namespace ThreeMusketeers.Gameplay
         /// Applies the active theme's camera background -- see
         /// ThemeDefinition.backgroundColor / backgroundImage. Always sets the
         /// Board Camera's clear color as a safety-net backdrop, then, if the
-        /// theme supplies a Background Image, layers a sprite in front of it
-        /// sized to exactly fill the camera's view. That sprite lives on a
-        /// GameObject parented to the camera itself (created once, reused
-        /// after that) so it automatically stays correctly placed/sized even
-        /// if the camera ever moves -- nothing here assumes it stays fixed.
+        /// theme supplies a Background Image, layers a sprite behind everything
+        /// and fits it to the camera's view using the "Background Fit" setting
+        /// (Cover by default: fills the screen, crops overflow, never stretches).
+        /// The sprite lives on a GameObject parented to the camera (found by name
+        /// and reused, never duplicated) so it stays placed correctly when the
+        /// camera moves. It is refitted automatically whenever the camera's field
+        /// of view or the screen's aspect ratio changes (see Update).
         ///
         /// Called automatically by BuildBoard(), but public and safe to call
         /// on its own too -- MainMenuController does exactly that at launch
@@ -220,38 +246,134 @@ namespace ThreeMusketeers.Gameplay
 
             if (theme.backgroundImage == null)
             {
-                if (_backgroundRenderer != null) _backgroundRenderer.gameObject.SetActive(false);
+                var existing = FindBackgroundRenderer();
+                if (existing != null) existing.gameObject.SetActive(false);
                 return;
             }
 
-            if (_backgroundRenderer == null)
-            {
-                var go = new GameObject("ThemeBackground");
-                go.transform.SetParent(boardCamera.transform, false);
-                _backgroundRenderer = go.AddComponent<SpriteRenderer>();
-            }
+            var bg = GetOrCreateBackgroundRenderer();
+            bg.gameObject.SetActive(true);
+            bg.sprite = theme.backgroundImage;
+            FitBackground();
+        }
 
-            _backgroundRenderer.gameObject.SetActive(true);
-            _backgroundRenderer.sprite = theme.backgroundImage;
+        /// <summary>
+        /// Re-fits the background to the camera as it is right now. Safe to call any time; does nothing if
+        /// the theme has no Background Image. Called automatically when the camera's field of view or the
+        /// screen aspect changes.
+        /// </summary>
+        public void RefitBackground()
+        {
+            if (_backgroundRenderer == null) _backgroundRenderer = FindBackgroundRenderer();
+            if (_backgroundRenderer == null || !_backgroundRenderer.gameObject.activeSelf || _backgroundRenderer.sprite == null) return;
+            FitBackground();
+        }
+
+        /// <summary>
+        /// The existing "ThemeBackground" child of the camera, if any. Any extra copies (left behind in the
+        /// scene by earlier versions of this script) are destroyed so only one ever exists.
+        /// </summary>
+        private SpriteRenderer FindBackgroundRenderer()
+        {
+            if (boardCamera == null) return null;
+            SpriteRenderer found = null;
+            var camTransform = boardCamera.transform;
+            for (int i = camTransform.childCount - 1; i >= 0; i--)
+            {
+                var child = camTransform.GetChild(i);
+                if (child.name != BackgroundObjectName) continue;
+                var sr = child.GetComponent<SpriteRenderer>();
+                if (found == null && sr != null) found = sr;
+                else if (Application.isPlaying) Destroy(child.gameObject);
+                else DestroyImmediate(child.gameObject);
+            }
+            _backgroundRenderer = found;
+            return found;
+        }
+
+        private SpriteRenderer GetOrCreateBackgroundRenderer()
+        {
+            if (_backgroundRenderer != null) return _backgroundRenderer;
+            var found = FindBackgroundRenderer();
+            if (found != null) return found;
+
+            var go = new GameObject(BackgroundObjectName);
+            // Generated at runtime/preview time, so keep it out of the saved scene file. Saving it is
+            // what used to leave stale copies behind after every preview.
+            go.hideFlags = HideFlags.DontSaveInEditor;
+            go.transform.SetParent(boardCamera.transform, false);
+            _backgroundRenderer = go.AddComponent<SpriteRenderer>();
+            return _backgroundRenderer;
+        }
+
+        private void FitBackground()
+        {
+            var sprite = _backgroundRenderer.sprite;
+            if (sprite == null || boardCamera == null) return;
 
             float height = boardCamera.orthographic
                 ? boardCamera.orthographicSize * 2f
                 : 2f * backgroundDistance * Mathf.Tan(boardCamera.fieldOfView * 0.5f * Mathf.Deg2Rad);
             float width = height * boardCamera.aspect;
 
+            Vector2 nativeSize = sprite.bounds.size;
+            if (nativeSize.x <= 0f || nativeSize.y <= 0f || width <= 0f || height <= 0f) return;
+
+            float scaleX = width / nativeSize.x;
+            float scaleY = height / nativeSize.y;
+
             var t = _backgroundRenderer.transform;
-            t.localPosition = new Vector3(0f, 0f, backgroundDistance);
             t.localRotation = Quaternion.identity;
 
-            // Stretched to exactly fill width/height computed above, rather than
-            // preserving the sprite's own aspect -- author backdrop art at the
-            // target screen aspect ratio (see ThemeDefinition.backgroundImage's
-            // tooltip) so this stretch is a no-op in practice.
-            Vector2 nativeSize = _backgroundRenderer.sprite.bounds.size;
-            t.localScale = new Vector3(
-                nativeSize.x > 0f ? width / nativeSize.x : 1f,
-                nativeSize.y > 0f ? height / nativeSize.y : 1f,
-                1f);
+            float shiftX = 0f, shiftY = 0f;
+            switch (backgroundFit)
+            {
+                case BackgroundFitMode.Stretch:
+                    t.localScale = new Vector3(scaleX, scaleY, 1f);
+                    break;
+
+                case BackgroundFitMode.Contain:
+                {
+                    float s = Mathf.Min(scaleX, scaleY);
+                    t.localScale = new Vector3(s, s, 1f);
+                    break;
+                }
+
+                default: // Cover
+                {
+                    float s = Mathf.Max(scaleX, scaleY);
+                    t.localScale = new Vector3(s, s, 1f);
+
+                    // Image is bigger than the view on at least one axis. Slide it so the chosen focus point
+                    // stays in view, never far enough to expose an edge.
+                    float overflowX = nativeSize.x * s - width;
+                    float overflowY = nativeSize.y * s - height;
+                    float fx = Mathf.Clamp01(backgroundFocus.x);
+                    float fy = Mathf.Clamp01(backgroundFocus.y);
+                    if (overflowX > 0f) shiftX = (0.5f - fx) * (nativeSize.x * s);
+                    if (overflowY > 0f) shiftY = (0.5f - fy) * (nativeSize.y * s);
+                    shiftX = Mathf.Clamp(shiftX, -overflowX * 0.5f, overflowX * 0.5f);
+                    shiftY = Mathf.Clamp(shiftY, -overflowY * 0.5f, overflowY * 0.5f);
+                    break;
+                }
+            }
+
+            t.localPosition = new Vector3(shiftX, shiftY, backgroundDistance);
+
+            _fitFov = boardCamera.fieldOfView;
+            _fitAspect = boardCamera.aspect;
+            _fitOrthoSize = boardCamera.orthographicSize;
+            _fitOrthographic = boardCamera.orthographic;
+        }
+
+        /// <summary>True when the camera no longer matches what the background was last fitted to.</summary>
+        private bool BackgroundNeedsRefit()
+        {
+            if (boardCamera == null) return false;
+            return boardCamera.orthographic != _fitOrthographic
+                || !Mathf.Approximately(boardCamera.aspect, _fitAspect)
+                || !Mathf.Approximately(boardCamera.fieldOfView, _fitFov)
+                || !Mathf.Approximately(boardCamera.orthographicSize, _fitOrthoSize);
         }
 
         private void SpawnPiece(PieceType type, Coord coord)
@@ -355,6 +477,9 @@ namespace ThreeMusketeers.Gameplay
 
         private void Update()
         {
+            // Keep the theme background fitted if the camera's field of view or the screen shape changes.
+            if (_backgroundRenderer != null && BackgroundNeedsRefit()) RefitBackground();
+
             if (!_inputEnabled || boardCamera == null) return;
 
             // Pointer.current unifies mouse (Editor/desktop) and touch
