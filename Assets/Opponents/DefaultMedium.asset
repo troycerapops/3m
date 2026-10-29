@@ -13,14 +13,18 @@ MonoBehaviour:
   m_Name: DefaultMedium
   m_EditorClassIdentifier: Assembly-CSharp::ThreeMusketeers.AI.OpponentDefinition
   opponentId: default-medium
-  displayName: 
+  displayName: Fantastic Jim
+  portrait: {fileID: 0}
   tier: 2
   styleAdjectives:
   - Impulsive
   - Inconsistent
   profile:
-    Name: Medium
+    Name: Fantastic Jim
     SearchDepth: 3
+    BonusDepthMax: 0
+    BonusDepthNodeLimit: 0
+    Evaluation: 1
     TopN: 2
     BlunderChance: 0.08
     BlunderSeverityCap: 20

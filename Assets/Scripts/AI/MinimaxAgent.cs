@@ -41,13 +41,13 @@ namespace ThreeMusketeers.AI
         private Stopwatch _clock;
         private bool _prune;
 
-        /// <summary>The evaluation numbers this agent uses (default: chosen by Profile.Evaluation).</summary>
+        /// <summary>The evaluation numbers this agent uses (default: the tuned set for the side this agent plays).</summary>
         public EvalWeights Weights { get; }
 
         public MinimaxAgent(Player controlledPlayer, AIProfile profile, int? seed = null, EvalWeights weights = null)
         {
             ControlledPlayer = controlledPlayer;
-            Weights = weights ?? EvalWeights.ForSide(controlledPlayer, profile != null ? profile.Evaluation : EvaluationSet.Original);
+            Weights = weights ?? EvalWeights.ForSide(controlledPlayer);
             Profile = profile ?? throw new ArgumentNullException(nameof(profile));
             _rng = seed.HasValue ? new Random(seed.Value) : new Random();
             _initialDefense = BoardState.BoardSize * BoardState.BoardSize - 3;

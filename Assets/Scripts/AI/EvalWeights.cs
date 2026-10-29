@@ -4,20 +4,15 @@ using ThreeMusketeers.Core;
 
 namespace ThreeMusketeers.AI
 {
-    /// <summary>Which static evaluation an AI uses. Original = the first version; Tuned = self-play-tuned numbers (Defense only; Offense AI always uses Original).</summary>
-    public enum EvaluationSet
-    {
-        Original = 0,
-        Tuned = 1
-    }
-
     /// <summary>
     /// The numbers the AI's static evaluation multiplies by. Everything is
     /// written from OFFENSE's point of view: positive = good for Offense.
     /// A Defense AI uses the same features and just flips the sign of the total.
     ///
-    /// Each side gets its own set (see ForSide), so tuning Defense play can
-    /// never change how Offense plays.
+    /// Each side has its own tuned set (see ForSide), so retuning one side
+    /// never changes how the other plays. Every AI opponent and the hint
+    /// engine use these tuned sets; the original numbers (Baseline) are kept
+    /// only so tests can compare against the first version of the AI.
     /// </summary>
     [Serializable]
     public class EvalWeights
@@ -44,7 +39,7 @@ namespace ThreeMusketeers.AI
 
         public EvalWeights Copy() => (EvalWeights)MemberwiseClone();
 
-        /// <summary>The original evaluation, unchanged. Offense always uses this.</summary>
+        /// <summary>The original (first-version) evaluation. No longer used by any AI or hint; kept for test comparisons.</summary>
         public static EvalWeights Baseline() => new EvalWeights();
 
         /// <summary>
@@ -65,10 +60,9 @@ namespace ThreeMusketeers.AI
         };
 
         /// <summary>
-        /// A tuned Offense evaluation (found against the tuned Defense). NOT used by any AI
-        /// opponent: Offense AI deliberately keeps the original numbers. Kept here because it is
-        /// the natural evaluation for a future HINT engine, which should suggest good Offense
-        /// moves without making the opponent any harder.
+        /// The tuned Offense evaluation (found by self-play against the tuned Defense). Used by the
+        /// Offense AI at every difficulty and by the hint engine. In test games it adds about
+        /// 12-14 win-rate points at depths 4-6 and little or nothing at depth 8.
         /// </summary>
         public static EvalWeights TunedOffense() => new EvalWeights
         {
@@ -78,13 +72,10 @@ namespace ThreeMusketeers.AI
             Edge = 2f
         };
 
-        /// <summary>
-        /// Weights an AI uses for a side. Tuned only changes DEFENSE play; Offense AI always uses
-        /// the original numbers, whichever set is chosen.
-        /// </summary>
-        public static EvalWeights ForSide(Player side, EvaluationSet set)
+        /// <summary>The weights an AI (or hint) uses for a side: always the tuned set for that side.</summary>
+        public static EvalWeights ForSide(Player side)
         {
-            return set == EvaluationSet.Tuned && side == Player.Defense ? TunedDefense() : Baseline();
+            return side == Player.Defense ? TunedDefense() : TunedOffense();
         }
 
         public override string ToString()

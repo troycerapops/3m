@@ -13,14 +13,18 @@ MonoBehaviour:
   m_Name: DefaultExpert
   m_EditorClassIdentifier: Assembly-CSharp::ThreeMusketeers.AI.OpponentDefinition
   opponentId: default-expert
-  displayName: 
+  displayName: The Captain
+  portrait: {fileID: 0}
   tier: 4
   styleAdjectives:
   - Relentless
   - Far-sighted
   profile:
-    Name: Expert
+    Name: The Captain
     SearchDepth: 8
+    BonusDepthMax: 2
+    BonusDepthNodeLimit: 600000
+    Evaluation: 1
     TopN: 1
     BlunderChance: 0
     BlunderSeverityCap: 20

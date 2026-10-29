@@ -13,14 +13,18 @@ MonoBehaviour:
   m_Name: DefaultHard
   m_EditorClassIdentifier: Assembly-CSharp::ThreeMusketeers.AI.OpponentDefinition
   opponentId: default-hard
-  displayName: 
+  displayName: Lady Luck
+  portrait: {fileID: 0}
   tier: 3
   styleAdjectives:
   - Calculating
   - Steady
   profile:
-    Name: Hard
+    Name: Lady Luck
     SearchDepth: 5
+    BonusDepthMax: 0
+    BonusDepthNodeLimit: 0
+    Evaluation: 1
     TopN: 1
     BlunderChance: 0
     BlunderSeverityCap: 20

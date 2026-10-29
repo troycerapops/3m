@@ -68,16 +68,6 @@ namespace ThreeMusketeers.AI
 #endif
         public int BonusDepthNodeLimit = 0;
 
-        /// <summary>
-        /// Which static evaluation the AI judges positions with. Original = how it always played.
-        /// Tuned = numbers found by self-play tuning. This only changes DEFENSE play (much stronger at
-        /// the same depth); an AI playing Offense uses the original numbers either way.
-        /// </summary>
-#if UNITY_5_3_OR_NEWER
-        [UnityEngine.Tooltip("Original = how the AI always judged positions. Tuned = self-play-tuned numbers. Only changes Defense play (much stronger); an AI playing Offense is unchanged.")]
-#endif
-        public EvaluationSet Evaluation = EvaluationSet.Original;
-
         // ---- 2. Move randomness -----------------------------------------
         /// <summary>Pick uniformly among the top N scored moves. 1 = always the best move.</summary>
         public int TopN = 1;
@@ -115,18 +105,18 @@ namespace ThreeMusketeers.AI
 
         public static AIProfile Medium() => new AIProfile
         {
-            Name = "Medium", SearchDepth = 3, TopN = 2, BlunderChance = 0.08f, BlunderSeverityCap = 20f,
-            Opponent = OpponentModel.Greedy
+            Name = "Medium", SearchDepth = 4, TopN = 1, BlunderChance = 0f,
+            Opponent = OpponentModel.Optimal
         };
 
         public static AIProfile Hard() => new AIProfile
         {
-            Name = "Hard", SearchDepth = 5, TopN = 1, BlunderChance = 0f,
+            Name = "Hard", SearchDepth = 6, TopN = 1, BlunderChance = 0f,
             Opponent = OpponentModel.Optimal
         };
 
         /// <summary>
-        /// Deepest preset: depth 8, tuned Defense evaluation, and up to 2 bonus plies when a
+        /// Deepest preset: depth 8 and up to 2 bonus plies when a
         /// turn is cheap (late game). Depth 9 was tried and judged too slow on a desktop, so 8 it is.
         /// The GameManager logs every AI move's time so phone speed can be checked.
         /// </summary>
@@ -134,7 +124,6 @@ namespace ThreeMusketeers.AI
         {
             Name = "Expert", SearchDepth = 8, TopN = 1, BlunderChance = 0f,
             Opponent = OpponentModel.Optimal,
-            Evaluation = EvaluationSet.Tuned,
             BonusDepthMax = 2, BonusDepthNodeLimit = 600000
         };
     }

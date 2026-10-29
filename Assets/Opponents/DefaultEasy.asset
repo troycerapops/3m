@@ -14,13 +14,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ThreeMusketeers.AI.OpponentDefinition
   opponentId: default-easy
   displayName: Mr. Breezy
+  portrait: {fileID: 0}
   tier: 1
   styleAdjectives:
-  - Shortsighted
-  - Careless
+  - Easy
+  - Beautiful
   profile:
     Name: Mr. Breezy
     SearchDepth: 1
+    BonusDepthMax: 0
+    BonusDepthNodeLimit: 0
+    Evaluation: 1
     TopN: 4
     BlunderChance: 0.25
     BlunderSeverityCap: 30
